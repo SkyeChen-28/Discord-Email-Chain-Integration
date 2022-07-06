@@ -1,0 +1,18 @@
+{
+    "metadata": {
+        "version": "1.0.0"
+    },
+    "em_srv_parms": {
+        "smtp_host": "smtp.office365.com",
+        "smtp_port": 587,
+        "imap_host": "outlook.office365.com",
+        "imap_port": 993
+    },
+    "dir_paths": {
+        "max_uid_path": "DynamicMemoryFiles/max_uid.txt",
+        "em_atts_dir": "Attachments",
+        "deci_config_dir": "deci_config.json",
+        "guilds_dir": "DynamicMemoryFiles/guilds_conf.json",
+        "chain_users_dir": "DynamicMemoryFiles/chainUsers.csv"
+    }
+}

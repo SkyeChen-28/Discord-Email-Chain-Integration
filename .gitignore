@@ -1,0 +1,13 @@
+# Folders
+__pycache__/*
+.vscode/*
+Archive/*
+Attachments/*
+DiscordProfilePic/*
+DynamicMemoryFiles/*
+HiddenData/*
+
+# Workspace Config files
+Discord-Email-Chain-Integration.code-workspace
+
+# Dynamic files
