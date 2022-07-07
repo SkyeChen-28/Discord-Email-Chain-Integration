@@ -21,14 +21,10 @@ import getpass
 import asyncio
 from asyncio import get_event_loop, wait_for
 from collections import namedtuple
-from typing import Collection
+from typing import Collection, Union
 import re
 from htmlvalidation import HTMLValidator
 from markdownify import markdownify
-
-reminders = '[x] Remember to implement an "allowed emails" list so I don\'t spam the server with junk mail :)\n'
-reminders += '[ ] Have the program create the dynamic memory files if they don\'t exist' 
-print(reminders)
 
 # Set global variables
 deci_config_dir = 'deci_config.json'
@@ -75,23 +71,23 @@ def update_config_file(config_dir: str, config_dict: dict) -> None:
     with open(config_dir, mode = 'w') as fp:
         json.dump(config_dict, fp)
         
-def read_csv_set_idx(csv_file_path: str, idx_key: str = None) -> pd.DataFrame:
+def read_csv_set_idx(csv_file_path: str, idx_keys: Union[str, list] = None) -> pd.DataFrame:
     '''
-    Reads in a csv as a Pandas Dataframe and sets the index to idx_key
+    Reads in a csv as a Pandas Dataframe and sets the index to idx_keys
 
     Args:
         csv_file_path (str): Path to the csv file
-        idx_key (str, optional): Key column to set as index. Defaults to None. 
+        idx_keys (str, optional): Key column to set as index. Defaults to None. 
                                  If None, returns the dataframe with the 
                                  pandas default generated index.
 
     Returns:
-        pd.DataFrame: Dataframe with it's index set to idx_key
+        pd.DataFrame: Dataframe with it's index set to idx_keys
     '''
-    if idx_key is None:
+    if idx_keys is None:
         df = pd.read_csv(csv_file_path)
     else:
-        df = pd.read_csv(csv_file_path).set_index(idx_key)
+        df = pd.read_csv(csv_file_path).set_index(idx_keys)
     return df
 # Helper functions for dynamic memory files ^^^
 
@@ -213,32 +209,32 @@ async def allowed_channels_list(ctx):
     
     deci_config = read_config_file(deci_config_dir)
     guilds_dir = deci_config['dir_paths']['guilds_dir']
-    guild_conf = read_config_file(guilds_dir)
+    guilds_conf = read_config_file(guilds_dir)
     guild = ctx.guild.id
-    channels = guild_conf[guild]['allowedChannels']
+    channels = guilds_conf[guild]['email_channel']
     msg_reply = 'The list of allowed channels for email communication are:\n'
     for ch in channels:
         channel = bot.get_channel(ch)
         msg_reply += f'{channel.mention}\n'
     await ctx.reply(msg_reply)
     
-@bot.command(brief = 'Adds channel to allowed list')
-async def add_channel(ctx, channel_link):
+@bot.command(brief = 'Sets the emailing channel')
+async def set_channel(ctx, channel_link):
     '''
-    Adds a channel to the list of allowed channels for email communication. 
-    This list represents all the channels that the bot 
-    will scan for new messages to be sent as emails.
+    Sets the channel as the one used for email communications. 
+    The bot will scan for new messages in this channel and will send them as emails.
+    It will also scan for new emails and forward them to in this channel.
     
     Replies with a confirmation message
     
-    WARNING: The bot will add a channel to the list even if it has no permissions to
+    WARNING: The bot will set the channel even if it has no permissions to
     read or message in that channel. I am too lazy to add anything to remedy this issue 
     so just be aware that it exists!
 
     Args:
         ctx (Discord.Context): An object representing the message that called this command
-        channel_link (str): The channel you wish to add. 
-                            Must be of the format `#<channel_name>`
+        channel_link (str): The channel you wish to set as the emailing channel. 
+                            Must be a mention of the format `#<channel_name>`
     '''
     
     try:
@@ -247,65 +243,38 @@ async def add_channel(ctx, channel_link):
         channel = bot.get_channel(channel_id_int)
         deci_config = read_config_file(deci_config_dir)
         guilds_dir = deci_config['dir_paths']['guilds_dir']
-        guild_conf = read_config_file(guilds_dir)
+        guilds_conf = read_config_file(guilds_dir)
         guild = str(ctx.guild.id)
-        if channel_id in guild_conf[guild]['allowedChannels']:
-            await ctx.reply(f'{channel_link} is already in the list of allowed channels for email communication.')
-            return
-        guild_conf[guild]['allowedChannels'][str(channel_id)] = channel.name
-        update_config_file(guilds_dir, guild_conf)
-        await ctx.reply(f'{channel_link} has been successfully added to the list of allowed channels for email communication!')
+        guilds_conf[guild]['email_channel'] = {str(channel_id): channel.name}
+        update_config_file(guilds_dir, guilds_conf)
+        await ctx.reply(f'{channel_link} has been successfully set as the channel for email communication!')
     except:
         if channel_link[:2] != '<#':
             await ctx.reply(f'Couldn\'t recognize channel. Try mentioning the channel by using `#<channel_name>`')
         else:
-            await ctx.reply(f'Failed to add the channel to the list of allowed channels for email communication. Contact the bot developer for help.')      
+            await ctx.reply(f'Failed to set as the channel for email communication. Contact the bot developer for help.')      
     
-@bot.command(brief = 'Removes channel from allowed list')
-async def remove_channel(ctx, channel_link):
+@bot.command(brief = '')
+async def get_email_channel(ctx):
     '''
-    Removes a channel from the list of allowed channels for email communication. 
-    This list represents all the channels that the bot 
-    will scan for new messages to be sent as emails.
-    
-    Replies with a confirmation message
+    Replies with the channel currently set as the mailing channel
 
     Args:
         ctx (Discord.Context): An object representing the message that called this command
-        channel_link (str): The channel you wish to remove. 
-                            Must be of the format `#<channel_name>`
     '''
 
     # Read in the necessary variables from deci_config
     deci_config = read_config_file(deci_config_dir)
     guilds_dir = deci_config['dir_paths']['guilds_dir']
-    guild_conf = read_config_file(guilds_dir)
+    guilds_conf = read_config_file(guilds_dir)
     
-    # Try to remove the channel
     try:
-        channel_id = channel_link[2:-1]
-        guild = str(ctx.guild.id)
-        if channel_id in guild_conf[guild]['allowedChannels']:
-            guild_conf[guild]['allowedChannels'].pop(channel_id, None)
-            update_config_file(guilds_dir, guild_conf)
-            await ctx.reply(f'{channel_link} has been successfully removed from the list of allowed channels for email communication!')
-        else:
-            print('Channel wasn\'t on allow list')    
-            await ctx.reply(f'{channel_link} not found in the allowed channels list.')
+        for channel_id in guilds_conf[str(ctx.guild.id)]['email_channel'].keys():
+            channel = bot.get_channel(int(channel_id))
+            await ctx.reply(f'{channel.mention} is set as the current emailing channel')
+            return
     except:
-        # If channel is not a mention, send error message
-        if channel_link[:2] != '<#':
-            await ctx.reply(f'Couldn\'t recognize channel. Try mentioning the channel by using `#<channel_name>`')
-            return 
-        
-        # If channel was on the list (or not)
-        channel_id = channel_link[2:-1]
-        if channel_id in guild_conf[guild]['allowedChannels']:
-            await ctx.reply(f'Failed to remove the channel to the list of allowed channels for email communication. Contact the bot developer for help.')
-        else:
-            print('Channel wasn\'t on allow list')    
-            await ctx.reply(f'{channel_link} not found in the allowed channels list.')
-
+        await ctx.reply('No channel is set as the current emailing channel')
         
 @bot.command(brief = 'Replies with the current subject line')
 async def current_subject_line(ctx):
@@ -319,9 +288,9 @@ async def current_subject_line(ctx):
     # Read in the necessary variables from deci_config
     deci_config = read_config_file(deci_config_dir)
     guilds_dir = deci_config['dir_paths']['guilds_dir']
-    guild_conf = read_config_file(guilds_dir)
+    guilds_conf = read_config_file(guilds_dir)
     guild = str(ctx.guild.id)
-    curr_subj = guild_conf[guild]['currentSubject']
+    curr_subj = guilds_conf[guild]['currentSubject']
     await ctx.reply(f'The subject line is currently set to `{curr_subj}`')
         
 @bot.command()
@@ -340,11 +309,11 @@ async def edit_subject_line(ctx, subject_line):
     guild = str(ctx.guild.id)
     deci_config = read_config_file(deci_config_dir)
     guilds_dir = deci_config['dir_paths']['guilds_dir']
-    guild_conf = read_config_file(guilds_dir)
-    guild_conf[guild]['currentSubject'] = subject_line
+    guilds_conf = read_config_file(guilds_dir)
+    guilds_conf[guild]['currentSubject'] = subject_line
     
     # Edit the subject line
-    update_config_file(guilds_dir, guild_conf)
+    update_config_file(guilds_dir, guilds_conf)
     await ctx.reply(f'Subject line successfully switched to `{subject_line}`')
     
 @bot.command(hidden = True)
@@ -371,21 +340,29 @@ async def add_user(ctx, mention_user, name: str, email: str, colour: str = 'Dark
     # Read in the necessary variables from deci_config
     deci_config = read_config_file(deci_config_dir)
     chain_users_dir = deci_config['dir_paths']['chain_users_dir']
-    chain_users = read_csv_set_idx(chain_users_dir, 'Discord_ID')
+    chain_users_idx_keys = deci_config["dir_paths"]["chain_users_idx_keys"]
+    
+    # Read in the chain_users dataframe
+    srv_id = ctx.guild.id
+    chain_users_all = read_csv_set_idx(chain_users_dir, chain_users_idx_keys)
+    try:
+        chain_users = chain_users_all.loc[srv_id]
+    except:
+        chain_users = chain_users_all
     
     # Check if user is already in the csv
     user_id = int(mention_user[2:-1])
     if user_id in chain_users.index:
         await ctx.reply(f'{mention_user} is already on the mailing list. Use \n> {COMMAND_PREFIX}`edit_user` \nto edit users')
+    # If user's not in the csv, then add the user to it
     else:
         user_info = {
             'Name': name,
             'Email': email,
-            'TextColour': colour
+            'Colour': colour
         }
-        df = pd.DataFrame(data = user_info, index=pd.Index([user_id], name = chain_users.index.name))
-        chain_users.loc[user_id] = user_info 
-        chain_users.to_csv(chain_users_dir)
+        chain_users_all.loc[(srv_id, user_id), :] = user_info 
+        chain_users_all.to_csv(chain_users_dir)
         await ctx.reply(f'{mention_user} was successfully added to the mailing list!')
     
 @bot.command()
@@ -419,7 +396,12 @@ async def get_user_info(ctx, mention_user):
     # Read in the necessary variables from deci_config
     deci_config = read_config_file(deci_config_dir)
     chain_users_dir = deci_config['dir_paths']['chain_users_dir']
-    chain_users = read_csv_set_idx(chain_users_dir, 'Discord_ID')
+    chain_users_idx_keys = deci_config["dir_paths"]["chain_users_idx_keys"]
+    
+    # Read in the chain_users dataframe
+    srv_id = ctx.guild.id
+    chain_users_all = read_csv_set_idx(chain_users_dir, chain_users_idx_keys)
+    chain_users = chain_users_all.loc[srv_id]
     
     # Check if user is in the csv
     user_id = int(mention_user[2:-1])
@@ -429,7 +411,9 @@ async def get_user_info(ctx, mention_user):
             reply_msg += f'{i}: {v}\n'
         await ctx.reply(reply_msg)
     else:
-        await ctx.reply(f'{mention_user} not found in mailing list')
+        msg_reply = f'{mention_user} not found in mailing list. To add yourself, use:\n'
+        msg_reply += f'> {COMMAND_PREFIX}`add_me <Name> <Email Address> <Colour (Optional)>`'
+        await ctx.reply(msg_reply)
  
 @bot.command(brief = 'Retrieves the user\'s mailing list info')
 async def get_my_info(ctx):
@@ -454,7 +438,12 @@ async def edit_user(ctx, mention_user):
     # Read in the necessary variables from deci_config
     deci_config = read_config_file(deci_config_dir)
     chain_users_dir = deci_config['dir_paths']['chain_users_dir']
-    chain_users = read_csv_set_idx(chain_users_dir, 'Discord_ID')
+    chain_users_idx_keys = deci_config["dir_paths"]["chain_users_idx_keys"]
+    
+    # Read in the chain_users dataframe
+    srv_id = ctx.guild.id
+    chain_users_all = read_csv_set_idx(chain_users_dir, chain_users_idx_keys)
+    chain_users = chain_users_all.loc[srv_id]
     
     # Check if user is in the csv
     user_id = int(mention_user[2:-1])
@@ -497,8 +486,8 @@ async def edit_user(ctx, mention_user):
                 print(f'Error: {e}')
                 return
             
-            # If selected_field is TextColour, then validate the entered value
-            if selected_field == 'TextColour':
+            # If selected_field is Colour, then validate the entered value
+            if selected_field == 'Colour':
                 colour = field_val
                 if not(await is_valid_html_colour(ctx, colour)):
                     await ctx.reply(f"Please try entering a colour for your `{selected_field}` again:")
@@ -507,14 +496,17 @@ async def edit_user(ctx, mention_user):
             else:
                 break 
             
-        chain_users.loc[user_id, selected_field] = field_val
-        chain_users.to_csv(chain_users_dir)
+        # Update the csv and send a confirmation message
+        chain_users_all.loc[(srv_id, user_id), selected_field] = field_val 
+        chain_users_all.to_csv(chain_users_dir)
         await ctx.reply(f'Successfully changed `{selected_field}` to `{field_val}` for {mention_user}')
             
       
     # Send an error message if user is not in csv  
     else:
-        await ctx.reply(f'{mention_user} not found in mailing list')
+        msg_reply = f'{mention_user} not found in mailing list. To add yourself, use:\n'
+        msg_reply += f'> {COMMAND_PREFIX}`add_me <Name> <Email Address> <Colour (Optional)>`'
+        await ctx.reply(msg_reply)
         
 @bot.command()
 async def edit_me(ctx):
@@ -543,13 +535,18 @@ async def remove_user(ctx, mention_user):
     # Read in the necessary variables from deci_config
     deci_config = read_config_file(deci_config_dir)
     chain_users_dir = deci_config['dir_paths']['chain_users_dir']
-    chain_users = read_csv_set_idx(chain_users_dir, 'Discord_ID')
+    chain_users_idx_keys = deci_config["dir_paths"]["chain_users_idx_keys"]
+    
+    # Read in the chain_users dataframe
+    srv_id = ctx.guild.id
+    chain_users_all = read_csv_set_idx(chain_users_dir, chain_users_idx_keys)
+    chain_users = chain_users_all.loc[srv_id]
     
     # Check if user is in mailing list, update then reply appropriately
     user_id = int(mention_user[2:-1])
     if user_id in chain_users.index:
-        chain_users = chain_users.drop(user_id, axis = 'index')
-        chain_users.to_csv(chain_users_dir)
+        chain_users_all = chain_users_all.drop((srv_id, user_id), axis = 'index')
+        chain_users_all.to_csv(chain_users_dir)
         await ctx.reply(f'Successfully removed {mention_user} from the mailing list!')
     else:
         await ctx.reply(f'User was not found in the mailing list!')
@@ -580,7 +577,57 @@ async def on_ready():
     
 on_ready = bot.event(on_ready)
 '''
+
+@bot.event
+async def on_guild_join(guild):
+    '''
+    This function executes when invited to a new server.
     
+    Adds the server to guilds_conf.json
+    '''
+    
+    # Read in the necessary variables from deci_config
+    deci_config = read_config_file(deci_config_dir)
+    guilds_dir = deci_config['dir_paths']['guilds_dir']
+    guilds_conf = read_config_file(guilds_dir)
+    
+    guild_id = str(guild.id)
+    guild_info = {
+        'name': guild.name,
+        'email_channel': None,
+        'currentSubject': None
+    }
+    guilds_conf[guild_id] = guild_info
+    update_config_file(guilds_dir, guilds_conf)
+    print(f'Added to `{guild.name}`')
+    
+@bot.event
+async def on_guild_remove(guild):
+    '''
+    This function executes when removed from a server.
+    
+    Removes the server from guilds_conf.json
+    '''
+    
+    # Read in the necessary variables from deci_config
+    deci_config = read_config_file(deci_config_dir)
+    guilds_dir = deci_config['dir_paths']['guilds_dir']
+    guilds_conf = read_config_file(guilds_dir)
+    
+    guild_id = str(guild.id)
+    popped_guild = guilds_conf.pop(guild_id)
+    popped_guild_name = popped_guild['name']
+    update_config_file(guilds_dir, guilds_conf)  
+    
+    # Update csv to remove all instances of the popped guild
+    chain_users_dir = deci_config['dir_paths']['chain_users_dir']
+    chain_users_idx_keys = deci_config['dir_paths']['chain_users_idx_keys']
+    chain_users_all = read_csv_set_idx(chain_users_dir, chain_users_idx_keys)
+    chain_users_all = chain_users_all.drop(index = guild.id, level = 0)
+    chain_users_all.to_csv(chain_users_dir)
+    
+    print(f'Removed from `{popped_guild_name}`')
+                 
 @bot.event
 async def on_message(message: dc.Message):
     '''
@@ -591,13 +638,6 @@ async def on_message(message: dc.Message):
     if bot.user == message.author:
         return
     
-    # If the command prefix is detected, then execute the command
-    # and don't execute the rest of on_message
-    if message.content.startswith(COMMAND_PREFIX):
-        await bot.process_commands(message)
-        return
-    
-    
     # Detect the channel that the message was sent from
     guild = str(message.guild.id)
     channel_id_sent_from = str(message.channel.id)
@@ -606,16 +646,63 @@ async def on_message(message: dc.Message):
     # Read in the necessary variables from deci_config
     deci_config = read_config_file(deci_config_dir)
     guilds_dir = deci_config['dir_paths']['guilds_dir']
-    guild_conf = read_config_file(guilds_dir)
-    allowedChannels = guild_conf[guild]["allowedChannels"]
+    guilds_conf = read_config_file(guilds_dir)
+    email_channel = guilds_conf[guild]["email_channel"]
     email_attachments_dir = deci_config['dir_paths']['em_atts_dir']
-    subject = guild_conf[guild]["currentSubject"]
+    subject = guilds_conf[guild]["currentSubject"]
     chain_users_dir = deci_config["dir_paths"]["chain_users_dir"]
-    chain_users = read_csv_set_idx(chain_users_dir, 'Discord_ID')
+    chain_users_idx_keys = deci_config["dir_paths"]["chain_users_idx_keys"]
     
+    # If email_channel is None, prompt user to add an email_channel
+    if email_channel is None:
+        if message.content.startswith(COMMAND_PREFIX):
+            await bot.process_commands(message)
+        else:
+            msg_re = 'No channel is set for email communications. Please set a channel using\n'
+            msg_re += f'> {COMMAND_PREFIX}`set_channel <#channel>`'
+            await message.reply(msg_re)
+        return
     
-    # Check that the message was sent from an allowed channel
-    if channel_id_sent_from in allowedChannels.keys():
+    # If the command prefix is detected, then execute the command
+    # and don't execute the rest of on_message
+    if message.content.startswith(COMMAND_PREFIX):
+        if channel_id_sent_from in email_channel.keys():
+            msg_re = f'It looks like you attempted to send a bot command in {message.channel.mention}\n'
+            msg_re += 'I recommend that you use another channel since most messages that are sent here\n'
+            msg_re += 'will be sent to the email chain!'
+            await message.reply(msg_re)
+        await bot.process_commands(message)
+        return
+    
+    # Read in the chain_users dataframe
+    srv_id = message.guild.id
+    chain_users_all = read_csv_set_idx(chain_users_dir, chain_users_idx_keys)
+    
+    # Check if anyone is in the server mailing list
+    if not(srv_id in chain_users_all.index.get_level_values('Server_ID')):
+        msg_re = 'There\'s no one on the server mailing list. Consider adding yourself as the first using\n'
+        msg_re += f'> {COMMAND_PREFIX}`add_me <Name> <Email Address> <Colour (Optional)>`'
+        await message.reply(msg_re)
+        return
+    chain_users = chain_users_all.loc[srv_id]
+    
+    # Check if author is in mailing list
+    author_id = message.author.id
+    if not(author_id in chain_users.index):
+        msg_re = 'You are not on the mailing list. To add yourself, use: \n'
+        msg_re += f'> {COMMAND_PREFIX}`add_me <Name> <Email Address> <Colour (Optional)>`'
+        await message.reply(msg_re)
+        return
+    
+    # Check that the message was sent from the allowed channel
+    if channel_id_sent_from in email_channel.keys():
+        # If currentSubject is None, prompt user to add a currentSubject
+        if subject is None:
+            msg_re = 'No subject line is set for email communications. Please set a subject line using\n'
+            msg_re += f'> {COMMAND_PREFIX}`edit_subject_line <subject_line>`'
+            await message.reply(msg_re)
+            return
+
         
         # If attachments are present, save them
         disc_atts = []
@@ -657,12 +744,11 @@ async def on_message(message: dc.Message):
             msg_raw = msg_raw.replace('`', '</code>', 1)
         
         # When a new message is detected, email it and send a confirmation reply
-        author_id = message.author.id
         try:
             author_name = chain_users.Name[author_id]
         except:
             author_name = message.author.name
-        author_colour = chain_users.loc[message.author.id, 'TextColour']
+        author_colour = chain_users.loc[message.author.id, 'Colour']
         emBody = f'''<strong>New message from <span style="text-decoration: underline;">{author_name}</span>: </strong> <br /> <br />'''
         emBody += f'<p style="color:{author_colour};">{msg_raw}</p>'
         confirmationMsg = sendDiscordMessageAsEmail(subject, emBody, disc_atts)
@@ -693,10 +779,10 @@ async def sendEmailAsDiscordMsg(subject: str, sender: str, emailMsg: str, att_pa
     # Read in the necessary variables from deci_config
     deci_config = read_config_file(deci_config_dir)
     guilds_dir = deci_config['dir_paths']['guilds_dir']
-    guild_conf = read_config_file(guilds_dir)
+    guilds_conf = read_config_file(guilds_dir)
     channels = []
-    for i in guild_conf:
-        for j in guild_conf[i]['allowedChannels']:
+    for i in guilds_conf:
+        for j in guilds_conf[i]['email_channel']:
             channels.append(j)
             
     # Modify replying subject string
@@ -710,8 +796,8 @@ async def sendEmailAsDiscordMsg(subject: str, sender: str, emailMsg: str, att_pa
     for guild in bot.guilds:
         
         # Edit the subject line
-        guild_conf[str(guild.id)]['currentSubject'] = subject     
-        update_config_file(guilds_dir, guild_conf)
+        guilds_conf[str(guild.id)]['currentSubject'] = subject     
+        update_config_file(guilds_dir, guilds_conf)
         
         for ch in channels:
             channel = bot.get_channel(int(ch))
@@ -840,7 +926,7 @@ async def fetch_messages_headers(imap_client: aioimaplib.IMAP4_SSL, max_uid: int
                     # Remove read threads
                     email_thread_line_break = '\r\n\r\n\r\nOn '
                     email_thread_line_break2 = ']\r\n\r\nOn '      
-                    email_thread_line_break3 = '\r\nGet Outlook for Android'   
+                    email_thread_line_break3 = '\n\nGet Outlook for Android'   
                     email_thread_line_break4 = '\n\n\n\n\nOn '                     
                     if email_thread_line_break2 in msg_body:
                         idx = msg_body.find(email_thread_line_break2)+1
@@ -933,5 +1019,8 @@ def main():
     loop.run_until_complete(asyncio.wait(tasks))
     
 if __name__ == '__main__':
+    reminders = '[x] Remember to implement an "allowed emails" list so I don\'t spam the server with junk mail :)\n'
+    reminders += '[ ] Have the program create the dynamic memory files if they don\'t exist' 
+    print(reminders)
+        
     main()
-    
