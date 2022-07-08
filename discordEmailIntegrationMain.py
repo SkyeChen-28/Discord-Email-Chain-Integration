@@ -66,23 +66,6 @@ class DeciConsts:
                 print('No email set in environment variable `DC_OUTLOOK_ADDR`')
                 self.email_user = input('Enter the managing email address here: ')                     
 
-# deci_config_dir = 'deci_config.json'
-
-# email_user = os.getenv('DC_OUTLOOK_ADDR')
-# if (email_user is None):
-#     print('No email set in environment variable `DC_OUTLOOK_ADDR`')
-#     email_user = input('Enter the managing email address here: ')
-# email_pass = os.getenv('DC_OUTLOOK_PASS')
-# if (email_pass is None):
-#     email_pass = getpass.getpass()
-    
-
-
-# # Initialize a Discord client
-# intents = dc.Intents.default()
-# COMMAND_PREFIX = '<:9beggingLuz:872186647679230042>'
-# bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents = intents)
-
 # Helper functions for dynamic memory files vvv
 def read_config_file(config_dir: str) -> dict:
     '''
@@ -207,7 +190,6 @@ async def check_repair_config_files(dcts: DeciConsts):
                 df.to_csv(path, index = False)
                 print(f'Created {path}')
     return
-    
 # Helper functions ^^^
 
 # Check Discord function vvv
@@ -502,15 +484,9 @@ async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4
                                 print('Downloaded file:', filename)
                         except:
                             pass
-                        # if filename in msg_body or part.get_content_maintype() == 'video':
                     if len(att_paths) == 2: 
                         att_paths = att_paths[::-1]    
-                            
-                    # thread_payload = thread_msg.get_payload()
-                    # if (att_paths == []) and (len(thread_payload) == 2) and (thread_payload[1].get_content_maintype() == 'image'):
-                    #     0
-                        
-                                            
+                                                                                          
                     subject = message_headers.get('subject')                 
                     await sendEmailAsDiscordMsg(dcts, subject, email_from, msg_body, att_paths)
             
@@ -568,36 +544,9 @@ async def imap_loop(dcts: DeciConsts, host: str, user: str, password: str) -> No
         print('%s ending idle' % user)
 # Check Email function ^^^
 
-# def main():        
-#     # Initialize the global constants
-#     dcts = DeciConsts()
-    
-#     # Read in the necessary variables from deci_config
-#     deci_config = read_config_file(dcts)
-#     imap_host = deci_config['em_srv_parms']['imap_host']
-#     tasks = [
-#         asyncio.ensure_future(check_repair_config_files(dcts)), # Create required files if they don't exist
-#         asyncio.ensure_future(imap_loop(imap_host, dcts.email_user, dcts.email_pass)), # Email Listener Task
-#         asyncio.ensure_future(bot.start(os.getenv('DISCORD_BOT'))) # Discord Bot Task
-#     ]
-#     loop = get_event_loop()
-#     loop.run_until_complete(asyncio.wait(tasks))
-    
-# if __name__ == '__main__':
-#     reminders = '[x] Remember to implement an "allowed emails" list so I don\'t spam the server with junk mail :)\n'
-#     reminders += '[ ] Have the program create the dynamic memory files if they don\'t exist' 
-#     print(reminders)
-        
-#     main()
-
 def main():        
-    # Initialize the global constants
+    # Initialize the global constants and the bot
     dcts = DeciConsts(True)
-    
-    # # Initialize a Discord client
-    # intents = dc.Intents.default()
-    # COMMAND_PREFIX = '<:9beggingLuz:872186647679230042>'
-    # bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents = intents)  
     bot = dcts.bot
     
     # Discord commands vvv
@@ -1178,16 +1127,5 @@ def main():
     loop.run_until_complete(asyncio.wait(tasks))
     # Discord commands ^^^
     
-    
-    
-if __name__ == '__main__':
-    reminders = '[x] Remember to implement an "allowed emails" list so I don\'t spam the server with junk mail :)\n'
-    reminders += '[ ] Have the program create the dynamic memory files if they don\'t exist' 
-    print(reminders)
-    
-    # # Initialize a Discord client
-    # intents = dc.Intents.default()
-    # COMMAND_PREFIX = '<:9beggingLuz:872186647679230042>'
-    # bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents = intents)
-        
+if __name__ == '__main__':        
     main()
