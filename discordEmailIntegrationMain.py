@@ -27,8 +27,31 @@ from htmlvalidation import HTMLValidator
 from markdownify import markdownify
 
 # Set global variables
+class DeciConsts:
+    '''
+    A class containing global constants for DECI
+    
+    Attributes:
+        `deci_config_dir`
+        `email_user`
+        `email_pass`
+    '''
+    def __init__(self):
+        self.deci_config_dir = 'deci_config.json'
+        self.email_user = os.getenv('DC_OUTLOOK_ADDR')
+        if (self.email_user is None):
+            print('No email set in environment variable `DC_OUTLOOK_ADDR`')
+            self.email_user = input('Enter the managing email address here: ')
+        self.email_pass = os.getenv('DC_OUTLOOK_PASS')
+        if (self.email_pass is None):
+            self.email_pass = getpass.getpass() 
+        # Initialize a Discord client
+        intents = dc.Intents.default()
+        self.COMMAND_PREFIX = '<:9beggingLuz:872186647679230042>'
+        self.bot = commands.Bot(command_prefix=self.COMMAND_PREFIX, intents = intents)     
+    
 deci_config_dir = 'deci_config.json'
-COMMAND_PREFIX = '<:9beggingLuz:872186647679230042>'
+
 email_user = os.getenv('DC_OUTLOOK_ADDR')
 if (email_user is None):
     print('No email set in environment variable `DC_OUTLOOK_ADDR`')
@@ -37,10 +60,37 @@ email_pass = os.getenv('DC_OUTLOOK_PASS')
 if (email_pass is None):
     email_pass = getpass.getpass()
     
-# Initialize a Discord client
-intents = dc.Intents.default()
-# intents.message_content = True
-bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents = intents)
+
+def main():        
+    # Initialize the global constants
+    dcts = DeciConsts()
+    
+    # Read in the necessary variables from deci_config
+    deci_config = read_config_file(dcts.deci_config_dir)
+    imap_host = deci_config['em_srv_parms']['imap_host']
+    tasks = [
+        asyncio.ensure_future(check_repair_config_files(dcts)), # Create required files if they don't exist
+        asyncio.ensure_future(imap_loop(imap_host, dcts.email_user, dcts.email_pass)), # Email Listener Task
+        asyncio.ensure_future(dcts.bot.start(os.getenv('DISCORD_BOT'))) # Discord Bot Task
+    ]
+    loop = get_event_loop()
+    loop.run_until_complete(asyncio.wait(tasks))
+    
+if __name__ == '__main__':
+    reminders = '[x] Remember to implement an "allowed emails" list so I don\'t spam the server with junk mail :)\n'
+    reminders += '[ ] Have the program create the dynamic memory files if they don\'t exist' 
+    print(reminders)
+    
+    # Initialize a Discord client
+    intents = dc.Intents.default()
+    COMMAND_PREFIX = '<:9beggingLuz:872186647679230042>'
+    bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents = intents)
+        
+    main()
+# # Initialize a Discord client
+# intents = dc.Intents.default()
+# COMMAND_PREFIX = '<:9beggingLuz:872186647679230042>'
+# bot = commands.Bot(command_prefix=COMMAND_PREFIX, intents = intents)
 
 # Helper functions for dynamic memory files vvv
 def read_config_file(config_dir: str) -> dict:
@@ -118,6 +168,48 @@ async def is_valid_html_colour(ctx, colour: str) -> bool:
         err_msg += ''
         await ctx.reply(err_msg)
         return False
+    
+async def check_repair_config_files(dcts: DeciConsts):
+    '''
+    Checks for missing files and creates them if missing
+
+    Args:
+        deci_config_dir (str): _description_
+    '''
+    
+    deci_config_dir = dcts.deci_config_dir
+    deci_config = read_config_file(deci_config_dir)
+    imap_host = deci_config['em_srv_parms']['imap_host']
+    dir_paths = deci_config['dir_paths']
+    for k in dir_paths:
+        path = deci_config['dir_paths'][k]
+        if not os.path.exists(path):
+            os.makedirs(path)
+            
+            # Set the max_uid_path
+            if k == 'max_uid_path':
+                0    
+                imap_client = aioimaplib.IMAP4_SSL(host=imap_host, timeout=30)
+                await imap_client.wait_hello_from_server()
+                await imap_client.login(dcts.email_user, dcts.email_pass)
+                await imap_client.select('INBOX')
+                ID_HEADER_SET = {'Content-Type', 'From', 'To', 'Cc', 'Bcc', 'Date', 'Subject', 'Message-ID', 'In-Reply-To', 'References'}
+                FETCH_MESSAGE_DATA_UID = re.compile(rb'.*UID (?P<uid>\d+).*')
+                response = await imap_client.uid('fetch', '%d:*' % (1),
+                                     '(UID FLAGS BODY.PEEK[HEADER.FIELDS (%s)])' % ' '.join(ID_HEADER_SET))
+                for i in range(0, len(response.lines) - 1, 3):
+                    fetch_command_without_literal = b'%s %s' % (response.lines[i], response.lines[i + 2])
+                    uid = int(FETCH_MESSAGE_DATA_UID.match(fetch_command_without_literal).group('uid'))
+                    with open(k, mode='w') as f:
+                        f.write(str(uid))
+            elif k == 'deci_config_dir':
+                0
+            elif k == 'guilds_dir':
+                0
+            elif k == 'chain_users_dir':
+                0
+    return
+    
 # Helper functions ^^^
 
 # Check Discord functions vvv
@@ -185,6 +277,11 @@ def sendDiscordMessageAsEmail(subject: str, body: str, attachments: list) -> str
         
     return confirmationMsg
 
+# class DeciBotCommands:
+    
+#     def __init__(self, bot):
+#         0
+
 @bot.command()
 async def echo(ctx, text_to_echo: str):
     '''
@@ -195,28 +292,6 @@ async def echo(ctx, text_to_echo: str):
         text_to_echo (str): The text you want the bot to echo
     '''
     await ctx.reply(text_to_echo)
-    
-@bot.command(brief = 'Replies with the list of allowed channels')
-async def allowed_channels_list(ctx):
-    '''
-    Replies with the list of allowed channels for email communication. 
-    This list represents all the channels that the bot 
-    will scan for new messages to be sent as emails.
-
-    Args:
-        ctx (Discord.Context): An object representing the message that called this command
-    '''
-    
-    deci_config = read_config_file(deci_config_dir)
-    guilds_dir = deci_config['dir_paths']['guilds_dir']
-    guilds_conf = read_config_file(guilds_dir)
-    guild = ctx.guild.id
-    channels = guilds_conf[guild]['email_channel']
-    msg_reply = 'The list of allowed channels for email communication are:\n'
-    for ch in channels:
-        channel = bot.get_channel(ch)
-        msg_reply += f'{channel.mention}\n'
-    await ctx.reply(msg_reply)
     
 @bot.command(brief = 'Sets the emailing channel')
 async def set_channel(ctx, channel_link):
@@ -254,10 +329,10 @@ async def set_channel(ctx, channel_link):
         else:
             await ctx.reply(f'Failed to set as the channel for email communication. Contact the bot developer for help.')      
     
-@bot.command(brief = '')
+@bot.command()
 async def get_email_channel(ctx):
     '''
-    Replies with the channel currently set as the mailing channel
+    Replies with the current mailing channel
 
     Args:
         ctx (Discord.Context): An object representing the message that called this command
@@ -340,7 +415,7 @@ async def add_user(ctx, mention_user, name: str, email: str, colour: str = 'Dark
     # Read in the necessary variables from deci_config
     deci_config = read_config_file(deci_config_dir)
     chain_users_dir = deci_config['dir_paths']['chain_users_dir']
-    chain_users_idx_keys = deci_config["dir_paths"]["chain_users_idx_keys"]
+    chain_users_idx_keys = deci_config["chain_users_idx_keys"]
     
     # Read in the chain_users dataframe
     srv_id = ctx.guild.id
@@ -396,7 +471,7 @@ async def get_user_info(ctx, mention_user):
     # Read in the necessary variables from deci_config
     deci_config = read_config_file(deci_config_dir)
     chain_users_dir = deci_config['dir_paths']['chain_users_dir']
-    chain_users_idx_keys = deci_config["dir_paths"]["chain_users_idx_keys"]
+    chain_users_idx_keys = deci_config["chain_users_idx_keys"]
     
     # Read in the chain_users dataframe
     srv_id = ctx.guild.id
@@ -438,7 +513,7 @@ async def edit_user(ctx, mention_user):
     # Read in the necessary variables from deci_config
     deci_config = read_config_file(deci_config_dir)
     chain_users_dir = deci_config['dir_paths']['chain_users_dir']
-    chain_users_idx_keys = deci_config["dir_paths"]["chain_users_idx_keys"]
+    chain_users_idx_keys = deci_config["chain_users_idx_keys"]
     
     # Read in the chain_users dataframe
     srv_id = ctx.guild.id
@@ -535,7 +610,7 @@ async def remove_user(ctx, mention_user):
     # Read in the necessary variables from deci_config
     deci_config = read_config_file(deci_config_dir)
     chain_users_dir = deci_config['dir_paths']['chain_users_dir']
-    chain_users_idx_keys = deci_config["dir_paths"]["chain_users_idx_keys"]
+    chain_users_idx_keys = deci_config["chain_users_idx_keys"]
     
     # Read in the chain_users dataframe
     srv_id = ctx.guild.id
@@ -621,7 +696,7 @@ async def on_guild_remove(guild):
     
     # Update csv to remove all instances of the popped guild
     chain_users_dir = deci_config['dir_paths']['chain_users_dir']
-    chain_users_idx_keys = deci_config['dir_paths']['chain_users_idx_keys']
+    chain_users_idx_keys = deci_config['chain_users_idx_keys']
     chain_users_all = read_csv_set_idx(chain_users_dir, chain_users_idx_keys)
     chain_users_all = chain_users_all.drop(index = guild.id, level = 0)
     chain_users_all.to_csv(chain_users_dir)
@@ -651,7 +726,7 @@ async def on_message(message: dc.Message):
     email_attachments_dir = deci_config['dir_paths']['em_atts_dir']
     subject = guilds_conf[guild]["currentSubject"]
     chain_users_dir = deci_config["dir_paths"]["chain_users_dir"]
-    chain_users_idx_keys = deci_config["dir_paths"]["chain_users_idx_keys"]
+    chain_users_idx_keys = deci_config["chain_users_idx_keys"]
     
     # If email_channel is None, prompt user to add an email_channel
     if email_channel is None:
@@ -1006,21 +1081,24 @@ async def imap_loop(host, user, password) -> None:
         print('%s ending idle' % user)
 # Check Email function ^^^
 
-def main():    
+# def main():        
+#     # Initialize the global constants
+#     dcts = DeciConsts()
     
-    # Read in the necessary variables from deci_config
-    deci_config = read_config_file(deci_config_dir)
-    imap_host = deci_config['em_srv_parms']['imap_host']
-    tasks = [
-        asyncio.ensure_future(imap_loop(imap_host, email_user, email_pass)), # Email Listener Task
-        asyncio.ensure_future(bot.start(os.getenv('DISCORD_BOT'))) # Discord Bot Task
-    ]
-    loop = get_event_loop()
-    loop.run_until_complete(asyncio.wait(tasks))
+#     # Read in the necessary variables from deci_config
+#     deci_config = read_config_file(dcts)
+#     imap_host = deci_config['em_srv_parms']['imap_host']
+#     tasks = [
+#         asyncio.ensure_future(check_repair_config_files(dcts)), # Create required files if they don't exist
+#         asyncio.ensure_future(imap_loop(imap_host, dcts.email_user, dcts.email_pass)), # Email Listener Task
+#         asyncio.ensure_future(bot.start(os.getenv('DISCORD_BOT'))) # Discord Bot Task
+#     ]
+#     loop = get_event_loop()
+#     loop.run_until_complete(asyncio.wait(tasks))
     
-if __name__ == '__main__':
-    reminders = '[x] Remember to implement an "allowed emails" list so I don\'t spam the server with junk mail :)\n'
-    reminders += '[ ] Have the program create the dynamic memory files if they don\'t exist' 
-    print(reminders)
+# if __name__ == '__main__':
+#     reminders = '[x] Remember to implement an "allowed emails" list so I don\'t spam the server with junk mail :)\n'
+#     reminders += '[ ] Have the program create the dynamic memory files if they don\'t exist' 
+#     print(reminders)
         
-    main()
+#     main()

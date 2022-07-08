@@ -13,7 +13,7 @@
         "em_atts_dir": "Attachments",
         "deci_config_dir": "deci_config.json",
         "guilds_dir": "DynamicMemoryFiles/guilds_conf.json",
-        "chain_users_dir": "DynamicMemoryFiles/chainUsers.csv",
-        "chain_users_idx_keys": ["Server_ID", "User_ID"]
-    }
+        "chain_users_dir": "DynamicMemoryFiles/chainUsers.csv"
+    },
+    "chain_users_idx_keys": ["Server_ID", "User_ID"]
 }
