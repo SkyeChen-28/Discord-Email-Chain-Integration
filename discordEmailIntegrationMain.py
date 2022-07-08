@@ -178,7 +178,7 @@ async def check_repair_config_files(dcts: DeciConsts):
             path_dirname = os.path.dirname(path)
             if path_dirname == '' and not('.' in path):
                 path_dirname = path
-            os.makedirs(path_dirname)
+            os.makedirs(path_dirname, exist_ok=True)
             
             # Set the max_uid_path
             if k == 'max_uid_path':
@@ -194,15 +194,18 @@ async def check_repair_config_files(dcts: DeciConsts):
                     fetch_command_without_literal = b'%s %s' % (response.lines[i], response.lines[i + 2])
                     uid = int(FETCH_MESSAGE_DATA_UID.match(fetch_command_without_literal).group('uid'))
                     with open(path, mode='w') as f:
-                        f.write(str(uid))
+                        f.write(str(uid))        
+                print(f'Created {path}')
             elif k == 'deci_config_dir':
                 print(f'Check the GitHub Repo for the latest version of {path}')
             elif k == 'guilds_dir':
-                with open(path, 'x'):
-                    pass
+                with open(path, 'w') as fp:
+                    fp.write('{}')
+                print(f'Created {path}')
             elif k == 'chain_users_dir':
-                df = pd.Dataframe(columns = ['Server_ID','User_ID','Name','Email','Colour'])
-                df.to_csv(path)
+                df = pd.DataFrame(columns = ['Server_ID','User_ID','Name','Email','Colour'])
+                df.to_csv(path, index = False)
+                print(f'Created {path}')
     return
     
 # Helper functions ^^^
