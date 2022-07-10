@@ -14,6 +14,16 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.parser import BytesHeaderParser, BytesParser
 
+# Text conversion and parsing packages
+from htmlvalidation import HTMLValidator
+from markdownify import markdownify
+import re
+
+# Datetime packages
+from datetime import datetime as dt
+from datetime import timedelta
+from dateutil import parser
+
 # Misc
 import os
 from os.path import basename
@@ -22,12 +32,6 @@ import asyncio
 from asyncio import get_event_loop, wait_for
 from collections import namedtuple
 from typing import Collection, Union
-import re
-from htmlvalidation import HTMLValidator
-from markdownify import markdownify
-from datetime import datetime as dt
-from datetime import timedelta
-from dateutil import parser
 
 # Set global variables
 class DeciConsts:
@@ -52,6 +56,7 @@ class DeciConsts:
         self.deci_config_dir = 'deci_config.json'
         self.email_user = os.getenv('DC_OUTLOOK_ADDR')
         self.email_pass = os.getenv('DC_OUTLOOK_PASS')
+        self.bot_token = os.getenv('DISCORD_BOT')
             
         # Discord related constants
         intents = dc.Intents.default()
@@ -61,10 +66,21 @@ class DeciConsts:
             # Initialize a Discord client
             self.bot = commands.Bot(command_prefix=self.COMMAND_PREFIX, intents = intents) 
             if (self.email_pass is None):
+                warn_msg = 'No email password set in environment variable `DC_OUTLOOK_PASS`.\n'
+                warn_msg += 'It\'s recommended that you set that EnvVar as your managing email password\n'
+                print(warn_msg)
                 self.email_pass = getpass.getpass()
             if (self.email_user is None):
-                print('No email set in environment variable `DC_OUTLOOK_ADDR`')
-                self.email_user = input('Enter the managing email address here: ')                     
+                warn_msg = 'No email set in environment variable `DC_OUTLOOK_ADDR`.\n'
+                warn_msg += 'It\'s recommended that you set that EnvVar as your managing email address\n'
+                print(warn_msg)
+                self.email_user = input('Enter the managing email address: ')    
+            if (self.bot_token is None):     
+                warn_msg = 'No bot token in environment variable `DISCORD_BOT`.\n'
+                warn_msg += 'It\'s recommended that you set that EnvVar as your bot\'s token\n'
+                warn_msg += 'If you don\'t have a bot, create one here: https://discord.com/developers/applications/\n'
+                print(warn_msg)
+                self.email_user = input('Enter your bot token: ')              
 
 # Helper functions for dynamic memory files vvv
 def read_config_file(config_dir: str) -> dict:
@@ -548,6 +564,7 @@ def main():
     # Initialize the global constants and the bot
     dcts = DeciConsts(True)
     bot = dcts.bot
+    bot_token = dcts.bot_token
     
     # Discord commands vvv
     @bot.command()
@@ -1121,7 +1138,7 @@ def main():
     tasks = [
         asyncio.ensure_future(check_repair_config_files(dcts)), # Create required files if they don't exist
         asyncio.ensure_future(imap_loop(dcts, imap_host, dcts.email_user, dcts.email_pass)), # Email Listener Task
-        asyncio.ensure_future(dcts.bot.start(os.getenv('DISCORD_BOT'))) # Discord Bot Task
+        asyncio.ensure_future(dcts.bot.start(bot_token)) # Discord Bot Task
     ]
     loop = get_event_loop()
     loop.run_until_complete(asyncio.wait(tasks))
