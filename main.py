@@ -21,7 +21,7 @@ import re
 
 # Datetime packages
 from datetime import datetime as dt
-from datetime import timedelta
+from datetime import timedelta, tzinfo, date
 from dateutil import parser
 
 # Misc
@@ -32,9 +32,10 @@ import asyncio
 from asyncio import get_event_loop, wait_for
 from collections import namedtuple
 from typing import Collection, Union
+import logging as log
 
 # Set global variables
-class DeciConsts:
+class DeciConsts:             
     '''
     A class containing global constants for DECI
     
@@ -68,19 +69,48 @@ class DeciConsts:
             if (self.email_pass is None):
                 warn_msg = 'No email password set in environment variable `DC_OUTLOOK_PASS`.\n'
                 warn_msg += 'It\'s recommended that you set that EnvVar as your managing email password\n'
-                print(warn_msg)
+                log_and_print(warn_msg, terminal_print=True)
                 self.email_pass = getpass.getpass()
             if (self.email_user is None):
                 warn_msg = 'No email set in environment variable `DC_OUTLOOK_ADDR`.\n'
                 warn_msg += 'It\'s recommended that you set that EnvVar as your managing email address\n'
-                print(warn_msg)
+                log_and_print(warn_msg, terminal_print=True)
                 self.email_user = input('Enter the managing email address: ')    
             if (self.bot_token is None):     
                 warn_msg = 'No bot token in environment variable `DISCORD_BOT`.\n'
                 warn_msg += 'It\'s recommended that you set that EnvVar as your bot\'s token\n'
                 warn_msg += 'If you don\'t have a bot, create one here: https://discord.com/developers/applications/\n'
-                print(warn_msg)
+                log_and_print(warn_msg, terminal_print=True)
                 self.email_user = input('Enter your bot token: ')              
+
+def log_and_print(message: str, level: str = 'info', terminal_print: bool = False) -> None:
+    '''
+    str, str -> None
+    
+    Custom function for logging and printing a message. Function doesn't output anything.
+    Possible levels:
+    - debug
+    - info
+    - warning
+    - error
+    - critical
+    '''
+    
+    if terminal_print:
+        print(message)
+    
+    # Encode emojis differently    
+    log_message = message#.encode('unicode_escape') # No longer required
+    if level == 'debug':
+        log.debug(log_message)
+    elif level == 'info':
+        log.info(log_message)
+    elif level == 'warning':
+        log.warning(log_message)
+    elif level == 'error':
+        log.error(log_message)
+    elif level == 'critical':
+        log.critical(log_message)   
 
 # Helper functions for dynamic memory files vvv
 def read_config_file(config_dir: str) -> dict:
@@ -178,6 +208,7 @@ async def check_repair_config_files(dcts: DeciConsts):
             if path_dirname == '' and not('.' in path):
                 path_dirname = path
             os.makedirs(path_dirname, exist_ok=True)
+            log_and_print(f"Directory {path_dirname} created")
             
             # Set the max_uid_path
             if k == 'max_uid_path':
@@ -194,17 +225,17 @@ async def check_repair_config_files(dcts: DeciConsts):
                     uid = int(FETCH_MESSAGE_DATA_UID.match(fetch_command_without_literal).group('uid'))
                     with open(path, mode='w') as f:
                         f.write(str(uid))        
-                print(f'Created {path}')
+                log_and_print(f'Created {path}')
             elif k == 'deci_config_dir':
-                print(f'Check the GitHub Repo for the latest version of {path}')
+                log_and_print(f'Check the GitHub Repo for the latest version of {path}')
             elif k == 'guilds_dir':
                 with open(path, 'w') as fp:
                     fp.write('{}')
-                print(f'Created {path}')
+                log_and_print(f'Created {path}')
             elif k == 'chain_users_dir':
                 df = pd.DataFrame(columns = ['Server_ID','User_ID','Name','Email','Colour'])
                 df.to_csv(path, index = False)
-                print(f'Created {path}')
+                log_and_print(f'Created {path}')
     return
 # Helper functions ^^^
 
@@ -264,12 +295,12 @@ def sendDiscordMessageAsEmail(dcts: DeciConsts, subject: str, body: str, attachm
     email_server.login(email_user, email_pass)
     email_server.sendmail(email_user, email_recipients, emMsg.as_string())
     confirmationMsg = f'Email [{email_subject}] successfully sent!'
-    print(confirmationMsg)
+    log_and_print(confirmationMsg)
     email_server.quit()
     
     for i in attachments:
         os.remove(i)   
-        print(f'Removed file: {i}')
+        log_and_print(f'Removed file: {i}')
         
     return confirmationMsg
 # Check Discord function ^^^
@@ -292,11 +323,19 @@ async def sendEmailAsDiscordMsg(dcts: DeciConsts, subject: str, sender: str, ema
     bot = dcts.bot
     deci_config = read_config_file(dcts.deci_config_dir)
     guilds_dir = deci_config['dir_paths']['guilds_dir']
+    chain_users_dir = deci_config['dir_paths']['chain_users_dir']
     guilds_conf = read_config_file(guilds_dir)
+    chain_users = read_csv_set_idx(chain_users_dir)
+    
+    # Send the email to all servers that the sender is listed in
+    try:
+        sender_email = sender[sender.find("<")+1:sender.find(">")]
+    except:
+        sender_email = sender
+    chain_users = chain_users[chain_users['Email'] == sender_email]
     channels = []
-    for i in guilds_conf:
-        for j in guilds_conf[i]['email_channel']:
-            channels.append(j)
+    for i in chain_users['Server_ID'].values:
+        channels.append(guilds_conf[str(i)]['email_channel'])
             
     # Modify replying subject string
     re_subj = 'Re: '
@@ -332,7 +371,7 @@ async def sendEmailAsDiscordMsg(dcts: DeciConsts, subject: str, sender: str, ema
                     with open(i, mode='rb') as f:
                         await channel.send(f'[image: {i}]', file = dc.File(f)) 
                     os.remove(i)   
-                    print(f'Removed file: {i}')
+                    log_and_print(f'Removed file: {i}')
 
 async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4_SSL, max_uid: int) -> int:
     ID_HEADER_SET = {'Content-Type', 'From', 'To', 'Cc', 'Bcc', 'Date', 'Subject', 'Message-ID', 'In-Reply-To', 'References'}
@@ -375,11 +414,11 @@ async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4
                 chainUsers = read_csv_set_idx(deci_config['dir_paths']['chain_users_dir'])
                 email_recipients = chainUsers['Email']
                 if not(from_email_addr in email_recipients.values):
-                    print(f'Email received from an address that\'s not on the mailing list: {from_email_addr}')
+                    log_and_print(f'Email received from an address that\'s not on the mailing list: {from_email_addr}')
                     return uid
                 
                 
-                print(message_headers)
+                log_and_print(f'Incoming email headers:\n{message_headers}')
                 dwnld_resp = await imap_client.uid('fetch', str(uid), 'BODY.PEEK[]')
                 thread_msg = BytesParser().parsebytes(dwnld_resp.lines[1])
                 email_timestamp = parser.parse(thread_msg.get('Date'))
@@ -467,7 +506,7 @@ async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4
                     elif email_thread_line_break4 in msg_body:
                         idx = msg_body.find(email_thread_line_break4)
                         msg_body = msg_body[:idx]
-                    print(f'Body:\n{msg_body}\n')
+                    log_and_print(f'Email Body:\n{msg_body}\n')
                     
                     # Extract attachments
                     att_paths = []
@@ -497,7 +536,7 @@ async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4
                                 with open(att_path, 'wb') as fp:
                                     fp.write(part.get_payload(decode=True))
                                 att_paths.append(att_path)
-                                print('Downloaded file:', filename)
+                                log_and_print('Downloaded file:', filename)
                         except:
                             pass
                     if len(att_paths) == 2: 
@@ -508,19 +547,19 @@ async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4
             
                 new_max_uid = uid
     else:
-        print('error %s' % response)
+        log_and_print('error %s' % response)
     return new_max_uid
 
 async def handle_server_push(push_messages: Collection[str]) -> None: # or str
     for msg in push_messages:
         if msg.endswith(b'EXISTS'):
-            print('new message: %s' % msg) # could fetch only the message instead of max_uuid:* in the loop
+            log_and_print('new email: %s' % msg) # could fetch only the message instead of max_uuid:* in the loop
         elif msg.endswith(b'EXPUNGE'):
-            print('message removed: %s' % msg)
+            log_and_print('email removed: %s' % msg)
         elif b'FETCH' in msg and b'\Seen' in msg:
-            print('message seen %s' % msg)
+            log_and_print('email seen %s' % msg)
         else:
-            print('unprocessed push message : %s' % msg)
+            log_and_print('unprocessed push email : %s' % msg)
 
 async def imap_loop(dcts: DeciConsts, host: str, user: str, password: str) -> None:
     '''
@@ -534,7 +573,7 @@ async def imap_loop(dcts: DeciConsts, host: str, user: str, password: str) -> No
                         This should NEVER be stored in plain text outside of the program!
     '''
     
-    print('imap_loop executing...')
+    log_and_print('Listening for emails using imap_loop...', terminal_print=True)
     imap_client = aioimaplib.IMAP4_SSL(host=host, timeout=30)
     await imap_client.wait_hello_from_server()
 
@@ -548,27 +587,41 @@ async def imap_loop(dcts: DeciConsts, host: str, user: str, password: str) -> No
     persistent_max_uid = 1
     with open(max_uid_path) as f:
         persistent_max_uid = int(f.read())
-        print(f'persistent_max_uid = {persistent_max_uid}')
+        log_and_print(f'persistent_max_uid = {persistent_max_uid}')
         
     while True:
         persistent_max_uid = await fetch_messages_headers(dcts, imap_client, persistent_max_uid)
-        print('%s starting idle' % user)
+        log_and_print('%s starting idle' % user)
         idle_task = await imap_client.idle_start(timeout=60)
         await handle_server_push(await imap_client.wait_server_push())
         imap_client.idle_done()
         await wait_for(idle_task, timeout=5)
-        print('%s ending idle' % user)
+        log_and_print('%s ending idle' % user)
 # Check Email function ^^^
 
-def main():        
+def main():    
     # Initialize the global constants and the bot
     dcts = DeciConsts(True)
     bot = dcts.bot
     bot_token = dcts.bot_token
     
+    # Configure logging
+    root_logger= log.getLogger()
+    root_logger.setLevel(log.INFO) 
+    today = str(date.today())
+    deci_config = read_config_file(dcts.deci_config_dir)
+    log_file_path = deci_config["dir_paths"]["log_file_dir"] + f"/deci_log_{today}.log"
+    handler = log.FileHandler(log_file_path, 
+                            mode = 'a', 
+                            encoding = 'utf-8',
+
+                            ) 
+    handler.setFormatter(log.Formatter('%(asctime)s [%(levelname)s]: %(message)s'))
+    root_logger.addHandler(handler)    
+    
     # Discord commands vvv
     @bot.command()
-    async def echo(ctx, text_to_echo: str):
+    async def echo(ctx, *text_to_echo: str):
         '''
         Replies with `text_to_echo`
 
@@ -576,7 +629,10 @@ def main():
             ctx (Discord.Context): An object representing the message that called this command
             text_to_echo (str): The text you want the bot to echo
         '''
+        text_to_echo = ' '.join(text_to_echo)
+        log_and_print(f'echo(text_to_echo={text_to_echo}) was called')
         await ctx.reply(text_to_echo)
+        log_and_print(f'Replied to {ctx.author.name} with: \n{text_to_echo}')
         
     @bot.command(brief = 'Sets the emailing channel')
     async def set_channel(ctx, channel_link):
@@ -597,6 +653,7 @@ def main():
                                 Must be a mention of the format `#<channel_name>`
         '''
         
+        log_and_print(f'set_channel(channel_link={channel_link}) was called')
         try:
             channel_id = channel_link[2:-1]
             channel_id_int = int(channel_id)
@@ -606,14 +663,18 @@ def main():
             guilds_dir = deci_config['dir_paths']['guilds_dir']
             guilds_conf = read_config_file(guilds_dir)
             guild = str(ctx.guild.id)
-            guilds_conf[guild]['email_channel'] = {str(channel_id): channel.name}
+            guilds_conf[guild]['email_channel'] = channel_id
             update_config_file(guilds_dir, guilds_conf)
-            await ctx.reply(f'{channel_link} has been successfully set as the channel for email communication!')
+            reply_msg = f'{channel_link} has been successfully set as the channel for email communication!'
         except:
             if channel_link[:2] != '<#':
-                await ctx.reply(f'Couldn\'t recognize channel. Try mentioning the channel by using `#<channel_name>`')
+                reply_msg = f'Couldn\'t recognize channel. Try mentioning the channel by using `#<channel_name>`'
             else:
-                await ctx.reply(f'Failed to set as the channel for email communication. Contact the bot developer for help.')      
+                reply_msg = f'Failed to set as the channel for email communication. Contact the bot developer for help.'      
+        await ctx.reply(reply_msg)
+        log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
+        
+        
         
     @bot.command()
     async def get_email_channel(ctx):
@@ -624,6 +685,8 @@ def main():
             ctx (Discord.Context): An object representing the message that called this command
         '''
 
+        log_and_print(f'get_email_channel() was called')
+        
         # Read in the necessary variables from deci_config
         dcts = DeciConsts()
         deci_config = read_config_file(dcts.deci_config_dir)
@@ -631,12 +694,14 @@ def main():
         guilds_conf = read_config_file(guilds_dir)
         
         try:
-            for channel_id in guilds_conf[str(ctx.guild.id)]['email_channel'].keys():
-                channel = bot.get_channel(int(channel_id))
-                await ctx.reply(f'{channel.mention} is set as the current emailing channel')
-                return
+            channel_id = guilds_conf[str(ctx.guild.id)]['email_channel']
+            channel = bot.get_channel(int(channel_id))
+            reply_msg = f'{channel.mention} is set as the current emailing channel'
         except:
-            await ctx.reply('No channel is set as the current emailing channel')
+            reply_msg = 'No channel is set as the current emailing channel'
+            
+        await ctx.reply(reply_msg)
+        log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
             
     @bot.command(brief = 'Replies with the current subject line')
     async def current_subject_line(ctx):
@@ -647,6 +712,7 @@ def main():
             ctx (Discord.Context): An object representing the message that called this command
         '''
         
+        log_and_print(f'current_subject_line() was called')
         # Read in the necessary variables from deci_config
         dcts = DeciConsts()
         deci_config = read_config_file(dcts.deci_config_dir)
@@ -654,10 +720,12 @@ def main():
         guilds_conf = read_config_file(guilds_dir)
         guild = str(ctx.guild.id)
         curr_subj = guilds_conf[guild]['currentSubject']
-        await ctx.reply(f'The subject line is currently set to `{curr_subj}`')
+        reply_msg = f'The subject line is currently set to `{curr_subj}`'
+        await ctx.reply(reply_msg)
+        log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
             
     @bot.command()
-    async def edit_subject_line(ctx, subject_line):
+    async def edit_subject_line(ctx, *subject_line):
         '''
         Sets subject line to `subject_line`
         
@@ -668,6 +736,8 @@ def main():
             subject_line (str): The subject line you wish to set for outgoing emails.
         '''
         
+        subject_line = ' '.join(subject_line)
+        log_and_print(f'edit_subject_line(subject_line={subject_line}) was called')
         # Read in the necessary variables from deci_config
         guild = str(ctx.guild.id)
         dcts = DeciConsts()
@@ -678,10 +748,12 @@ def main():
         
         # Edit the subject line
         update_config_file(guilds_dir, guilds_conf)
-        await ctx.reply(f'Subject line successfully switched to `{subject_line}`')
+        reply_msg = f'Subject line successfully switched to `{subject_line}`'
+        await ctx.reply(reply_msg)
+        log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
         
     @bot.command(hidden = True)
-    async def add_user(ctx, mention_user, name: str, email: str, colour: str = 'DarkSlateGray'):
+    async def add_user(ctx, mention_user, name: str = None, email: str = None, colour: str = 'DarkSlateGray'):
         '''
         Adds a user to the mailing list
         
@@ -695,6 +767,16 @@ def main():
             colour (str, optional): The text colour that the user wishes to have their emails sent in. 
                                     Defaults to 'DarkSlateGray'.
         '''
+           
+        log_and_print(f'add_user(mention_user={mention_user}, name={name}, email={email}, colour={colour}) was called')
+        
+        dcts = DeciConsts()
+        if name is None or email is None:
+            reply_msg = 'Invalid syntax error: The correct syntax for this command is\n'
+            reply_msg += f'{dcts.COMMAND_PREFIX}add_user <@user> <Name> <Email> <Colour (optional)>'
+            await ctx.reply(reply_msg)
+            log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
+        
         # Validate html colour
         valid_col = await is_valid_html_colour(ctx, colour)
         if not(valid_col):
@@ -718,7 +800,7 @@ def main():
         # Check if user is already in the csv
         user_id = int(mention_user[2:-1])
         if user_id in chain_users.index:
-            await ctx.reply(f'{mention_user} is already on the mailing list. Use \n> {dcts.COMMAND_PREFIX}`edit_user` \nto edit users')
+            reply_msg = f'{mention_user} is already on the mailing list. Use \n> {dcts.COMMAND_PREFIX}`edit_user` \nto edit users'
         # If user's not in the csv, then add the user to it
         else:
             user_info = {
@@ -728,7 +810,10 @@ def main():
             }
             chain_users_all.loc[(srv_id, user_id), :] = user_info 
             chain_users_all.to_csv(chain_users_dir)
-            await ctx.reply(f'{mention_user} was successfully added to the mailing list!')
+            reply_msg = f'{mention_user} was successfully added to the mailing list!'
+            
+        await ctx.reply(reply_msg)
+        log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
         
     @bot.command()
     async def add_me(ctx, name: str, email: str, colour: str = 'DarkSlateGray'):
@@ -758,6 +843,8 @@ def main():
             mention_user (str): A str representing a user mention in Discord of the form `<@USER>`
         '''
         
+        log_and_print(f'get_user_info(mention_user={mention_user}) was called')
+        
         # Read in the necessary variables from deci_config
         dcts = DeciConsts()
         deci_config = read_config_file(dcts.deci_config_dir)
@@ -775,11 +862,12 @@ def main():
             reply_msg = ''
             for i, v in chain_users.loc[user_id].items():   
                 reply_msg += f'{i}: {v}\n'
-            await ctx.reply(reply_msg)
         else:
-            msg_reply = f'{mention_user} not found in mailing list. To add yourself, use:\n'
-            msg_reply += f'> {dcts.COMMAND_PREFIX}`add_me <Name> <Email Address> <Colour (Optional)>`'
-            await ctx.reply(msg_reply)
+            reply_msg = f'{mention_user} not found in mailing list. To add yourself, use:\n'
+            reply_msg += f'> {dcts.COMMAND_PREFIX}`add_me <Name> <Email Address> <Colour (Optional)>`'
+        
+        await ctx.reply(reply_msg)
+        log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
     
     @bot.command(brief = 'Retrieves the user\'s mailing list info')
     async def get_my_info(ctx):
@@ -800,6 +888,8 @@ def main():
             ctx (Discord.Context): An object representing the message that called this command
             mention_user (str): A str representing a user mention in Discord of the form `<@USER>`
         '''
+        
+        log_and_print(f'edit_user(mention_user={mention_user}) was called. The logging for this function is not comprehensive')
         
         # Read in the necessary variables from deci_config
         dcts = DeciConsts()
@@ -831,14 +921,16 @@ def main():
                 except BaseException as e:
                     if type(e) == asyncio.exceptions.TimeoutError:
                         await ctx.reply('Response timed out. Please enter the command again')
-                    print(f'Error: {e}')
+                    log_and_print(f'Error: {e}')
                     return
                 
                 if selected_field in user_info_keys:
                     break
                 else:
-                    await ctx.reply(f'ERROR: Unrecognized info field.\n{choices_msg}')
-                    print(f'user_response = {user_response}')
+                    err_reply = f'ERROR: Unrecognized info field.\n{choices_msg}'
+                    log_and_print(err_reply, level="error", terminal_print=True)
+                    await ctx.reply(err_reply)
+                    log_and_print(f'user_response = {user_response}', terminal_print=True)
             
             # Ask the user to edit the field
             await ctx.reply(f'Enter the value that you want your `{selected_field}` to change to:')
@@ -850,7 +942,7 @@ def main():
                 except BaseException as e:
                     if type(e) == asyncio.exceptions.TimeoutError:
                         await ctx.reply('Response timed out. Please enter the command again')
-                    print(f'Error: {e}')
+                    log_and_print(f'Error: {e}')
                     return
                 
                 # If selected_field is Colour, then validate the entered value
@@ -886,8 +978,6 @@ def main():
         
         await(edit_user(ctx, f'<@{ctx.author.id}>'))
         
-        
-
     @bot.command(hidden = True)
     async def remove_user(ctx, mention_user):
         '''
@@ -898,6 +988,7 @@ def main():
             mention_user (str): A str representing a user mention in Discord of the form `<@USER>`
         '''
         
+        log_and_print(f'remove_user(mention_user={mention_user}) was called')
         
         # Read in the necessary variables from deci_config
         dcts = DeciConsts()
@@ -915,10 +1006,13 @@ def main():
         if user_id in chain_users.index:
             chain_users_all = chain_users_all.drop((srv_id, user_id), axis = 'index')
             chain_users_all.to_csv(chain_users_dir)
-            await ctx.reply(f'Successfully removed {mention_user} from the mailing list!')
+            reply_msg = f'Successfully removed {mention_user} from the mailing list!'
         else:
-            await ctx.reply(f'User was not found in the mailing list!')
-        
+            reply_msg = f'User was not found in the mailing list!'
+            
+        await ctx.reply(reply_msg)
+        log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
+               
     @bot.command()
     async def remove_me(ctx):
         '''
@@ -930,14 +1024,12 @@ def main():
         
         await remove_user(ctx, f'<@{ctx.author.id}>')
         
-        
-
     @bot.event
     async def on_ready():
         '''
         This function executes when turned on if it was off before
         '''
-        print(f'Logged in as {bot.user}')
+        log_and_print(f'Logged in as {bot.user}', terminal_print=True)
 
     ''' Above code is equivalent to:
     async def on_ready():
@@ -968,7 +1060,7 @@ def main():
         }
         guilds_conf[guild_id] = guild_info
         update_config_file(guilds_dir, guilds_conf)
-        print(f'Added to `{guild.name}`')
+        log_and_print(f'Added to `{guild.name}`')
         
     @bot.event
     async def on_guild_remove(guild):
@@ -996,7 +1088,7 @@ def main():
         chain_users_all = chain_users_all.drop(index = guild.id, level = 0)
         chain_users_all.to_csv(chain_users_dir)
         
-        print(f'Removed from `{popped_guild_name}`')
+        log_and_print(f'Removed from `{popped_guild_name}`')
                     
     @bot.event
     async def on_message(message: dc.Message):
@@ -1037,7 +1129,7 @@ def main():
         # If the command prefix is detected, then execute the command
         # and don't execute the rest of on_message
         if message.content.startswith(dcts.COMMAND_PREFIX):
-            if channel_id_sent_from in email_channel.keys():
+            if channel_id_sent_from == email_channel:
                 msg_re = f'It looks like you attempted to send a bot command in {message.channel.mention}\n'
                 msg_re += 'I recommend that you use another channel since most messages that are sent here\n'
                 msg_re += 'will be sent to the email chain!'
@@ -1066,7 +1158,7 @@ def main():
             return
         
         # Check that the message was sent from the allowed channel
-        if channel_id_sent_from in email_channel.keys():
+        if channel_id_sent_from == email_channel:
             # If currentSubject is None, prompt user to add a currentSubject
             if subject is None:
                 msg_re = 'No subject line is set for email communications. Please set a subject line using\n'
@@ -1083,7 +1175,7 @@ def main():
                 filename = f'{email_attachments_dir}/{message.channel.name}_{i.id}{file_extension}'
                 with open(filename, mode = 'wb') as fp:
                     await i.save(fp)
-                    print(f'Downloaded to {filename}')
+                    log_and_print(f'Downloaded to {filename}')
                 disc_atts.append(filename)
             
             # Convert message to html format
@@ -1127,7 +1219,7 @@ def main():
             await message.add_reaction('\N{INCOMING ENVELOPE}')
             print('')
         else:
-            print(f'Message detected in the restricted channel: {channel_sent_from}')
+            log_and_print(f'Message detected in the restricted channel: {channel_sent_from}')
         
         await bot.process_commands(message)
         return
