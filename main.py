@@ -112,7 +112,6 @@ def log_and_print(message: str, level: str = 'info', terminal_print: bool = Fals
     elif level == 'critical':
         log.critical(log_message)   
 
-# Helper functions for dynamic memory files vvv
 def read_config_file(config_dir: str) -> dict:
     '''
     Reads in the given ...config.json file
@@ -159,9 +158,7 @@ def read_csv_set_idx(csv_file_path: str, idx_keys: Union[str, list] = None) -> p
     else:
         df = pd.read_csv(csv_file_path).set_index(idx_keys)
     return df
-# Helper functions for dynamic memory files ^^^
 
-# Helper functions vvv
 async def is_valid_html_colour(ctx, colour: str) -> bool:
     '''
     Determines whether the given colour string is a valid html colour code
@@ -194,15 +191,19 @@ async def check_repair_config_files(dcts: DeciConsts):
     Checks for missing files and creates them if missing
 
     Args:
-        deci_config_dir (str): _description_
+        dcts (DeciConsts): Class containing global variables for the bot
     '''
     
+    # Load in required variables
     deci_config_dir = dcts.deci_config_dir
     deci_config = read_config_file(deci_config_dir)
     imap_host = deci_config['em_srv_parms']['imap_host']
     dir_paths = deci_config['dir_paths']
+    
     for k in dir_paths:
         path = deci_config['dir_paths'][k]
+        
+        # Check if each required file exists
         if not os.path.exists(path):
             path_dirname = os.path.dirname(path)
             if path_dirname == '' and not('.' in path):
@@ -254,24 +255,25 @@ def sendEmail(email_recipients: list, subject: str, body: str, attachments: list
         str: A confirmation message
     '''
     
+    # Load in required variables
     dcts = DeciConsts()
     deci_config = read_config_file(dcts.deci_config_dir)
-    emRecipients = ', '.join(email_recipients)
     
+    # Define email variables
     if subject is None:
         email_subject = body
     else: 
         email_subject = subject
     email_body = body
-    
     emMsg = MIMEMultipart()
     email_user, email_pass = dcts.email_user, dcts.email_pass
     emMsg['From'] = email_user
+    emRecipients = ', '.join(email_recipients)
     emMsg['To'] = emRecipients
     emMsg['Subject'] = email_subject
-    
     emMsg.attach(MIMEText(email_body, 'html'))
 
+    # Add attachments
     for f in attachments or []:
         with open(f, "rb") as fil:
             part = MIMEApplication(
@@ -286,30 +288,32 @@ def sendEmail(email_recipients: list, subject: str, body: str, attachments: list
     smtp_host = deci_config['em_srv_parms']['smtp_host']
     smtp_port = deci_config['em_srv_parms']['smtp_port']
     
+    # Connect to SMTP to send email
     email_server = smtplib.SMTP(host = smtp_host, port = smtp_port)
     email_server.ehlo()
     email_server.starttls()
-        
     email_server.login(email_user, email_pass)
+    
+    # Send the email and a confirmation message
     email_server.sendmail(email_user, email_recipients, emMsg.as_string())
     confirmationMsg = f'Email [{email_subject}] successfully sent!'
     log_and_print(confirmationMsg)
     email_server.quit()
     
+    # Remove each attachment now that we don't need them anymore
     for i in attachments:
         os.remove(i)   
         log_and_print(f'Removed file: {i}')
         
     return confirmationMsg
-# Helper functions ^^^
 
-# Check Discord function vvv
 def sendDiscordMessageAsEmail(ctx, dcts: DeciConsts, subject: str, body: str, attachments: list) -> str:
     '''
     Simple send email script
 
     Args:
         ctx (Discord.Context): An object representing the message that called this command
+        dcts (DeciConsts): Class containing global variables for the bot
         subject (str): Subject of the email to be sent
         body (str): Body of email to be sent in html format
         attachments (list): List of strings containing the file paths to the attachments
@@ -324,62 +328,18 @@ def sendDiscordMessageAsEmail(ctx, dcts: DeciConsts, subject: str, body: str, at
     chainUsers = read_csv_set_idx(deci_config['dir_paths']['chain_users_dir'])
     srv_id = ctx.guild.id
     email_recipients = chainUsers.loc[chainUsers['Server_ID'] == srv_id, 'Email'].values
-    # emRecipients = ', '.join(email_recipients)
     
+    # Send the email
     confirmationMsg = sendEmail(email_recipients, subject, body, attachments)
-
-
-    # if subject is None:
-    #     email_subject = body
-    # else: 
-    #     email_subject = subject
-    # email_body = body
-    
-    # emMsg = MIMEMultipart()
-    # email_user, email_pass = dcts.email_user, dcts.email_pass
-    # emMsg['From'] = email_user
-    # emMsg['To'] = emRecipients
-    # emMsg['Subject'] = email_subject
-    
-    # emMsg.attach(MIMEText(email_body, 'html'))
-
-    # for f in attachments or []:
-    #     with open(f, "rb") as fil:
-    #         part = MIMEApplication(
-    #             fil.read(),
-    #             Name=basename(f)
-    #         )
-    #     # After the file is closed
-    #     part['Content-Disposition'] = 'attachment; filename="%s"' % basename(f)
-    #     emMsg.attach(part)
-
-    # # Read in the necessary variables from deci_config
-    # smtp_host = deci_config['em_srv_parms']['smtp_host']
-    # smtp_port = deci_config['em_srv_parms']['smtp_port']
-    
-    # email_server = smtplib.SMTP(host = smtp_host, port = smtp_port)
-    # email_server.ehlo()
-    # email_server.starttls()
-        
-    # email_server.login(email_user, email_pass)
-    # email_server.sendmail(email_user, email_recipients, emMsg.as_string())
-    # confirmationMsg = f'Email [{email_subject}] successfully sent!'
-    # log_and_print(confirmationMsg)
-    # email_server.quit()
-    
-    # for i in attachments:
-    #     os.remove(i)   
-    #     log_and_print(f'Removed file: {i}')
         
     return confirmationMsg
-# Check Discord function ^^^
 
-# Check Email function vvv
 async def sendEmailAsDiscordMsg(dcts: DeciConsts, subject: str, sender: str, emailMsg: str, att_paths: list):
     '''
     Sends an email message as a Discord message
 
     Args:
+        dcts (DeciConsts): Class containing global variables for the bot
         subject (str): The subject of the email
         sender (str): The sender of the email
         emailMsg (str): The body of the email
@@ -395,27 +355,12 @@ async def sendEmailAsDiscordMsg(dcts: DeciConsts, subject: str, sender: str, ema
     chain_users_dir = deci_config['dir_paths']['chain_users_dir']
     guilds_conf = read_config_file(guilds_dir)
     chain_users = read_csv_set_idx(chain_users_dir)
+    
+    # Extract the sender's email address
     try:
         sender_email = sender[sender.find("<")+1:sender.find(">")]
     except:
         sender_email = sender
-        
-    # sender_df = chain_users[chain_users['Email'] == sender_email]
-    # sender_srvs = sender_df.get_level_values('Server_ID')
-    # sender_srvs_count = len(sender_srvs)
-    
-    # # If sender is in more than one server, send an error message
-    # if sender_srvs_count > 1:
-    #     err_msg = 'Error: You\'re in more than 1 server mailing list.\n'
-    #     err_msg += 'Please remove yourself from all but one server mailing list\n'
-    #     err_msg += 'or contact the bot admin.'
-    #     sendEmail(email_recipients = [sender], subject = f'Re: {subject}', body = err_msg)
-    # # Forward email to all other emails in server mailing list
-    # else:
-    #     srv_id = sender_srvs[0]
-    #     email_recipients = chain_users.loc[chain_users['Server_ID'] == srv_id, 'Email'].values
-    #     sendEmail(email_recipients = email_recipients, subject = f'Re: {subject}', body = emailMsg)
-        
     
     # Send the email to all servers that the sender is listed in
     chain_users = chain_users[chain_users['Email'] == sender_email]
@@ -431,13 +376,15 @@ async def sendEmailAsDiscordMsg(dcts: DeciConsts, subject: str, sender: str, ema
             subject = subject[4:]
         subject = re_subj + subject
             
-    # Set channel
+    # Set server
     guild = guild_ids[0]
         
     # Edit the subject line
     guilds_conf[str(guild)]['currentSubject'] = subject     
     update_config_file(guilds_dir, guilds_conf)
         
+    # Theoretically, this loop allows the bot to send an email to multiple channels
+    # But I've restricted it to only 1 channel when called from other functions in this .py file
     for ch in channels:
         channel = bot.get_channel(int(ch))
         
@@ -448,10 +395,11 @@ async def sendEmailAsDiscordMsg(dcts: DeciConsts, subject: str, sender: str, ema
         discMsg = f'New message from _{sender}_:\n'
         discMsg += f'**Subject: {subject}**\n'
         discMsg += f'> {emailMsg}'
+        
         # Send body text as Discord message
         await channel.send(discMsg)  
         
-        # Send attachments one by one
+        # Send attachments one by one, then remove them
         att_paths_len = len(att_paths)
         if att_paths_len != 0:   
             for i in att_paths: 
@@ -460,7 +408,22 @@ async def sendEmailAsDiscordMsg(dcts: DeciConsts, subject: str, sender: str, ema
                 os.remove(i)   
                 log_and_print(f'Removed file: {i}')
 
-async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4_SSL, max_uid: int) -> int:
+async def fetch_email_messages(dcts: DeciConsts, imap_client: aioimaplib.IMAP4_SSL, max_uid: int) -> int:
+    '''
+    Fetches new email messages and calls sendEmailAsDiscordMsg() if the email was sent by
+    someone on the mailing list.
+    
+    Args:
+        dcts (DeciConsts): Class containing global variables for the bot.
+        imap_client (IMAP4_SSL): Object representing an imap instance 
+                                 for listening to incoming emails.
+        max_uid (int): The max uid of all emails in the current inbox.
+        
+    Returns:
+        The new max_uid (int)
+    '''
+    
+    # The code block that fetches emails. I don't understand this but it works
     ID_HEADER_SET = {'Content-Type', 'From', 'To', 'Cc', 'Bcc', 'Date', 'Subject', 'Message-ID', 'In-Reply-To', 'References'}
     FETCH_MESSAGE_DATA_UID = re.compile(rb'.*UID (?P<uid>\d+).*')
     FETCH_MESSAGE_DATA_SEQNUM = re.compile(rb'(?P<seqnum>\d+) FETCH.*')
@@ -476,6 +439,7 @@ async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4
         for i in range(0, len(response.lines) - 1, 3):
             fetch_command_without_literal = b'%s %s' % (response.lines[i], response.lines[i + 2])
 
+            # Define variables for important email parameters
             uid = int(FETCH_MESSAGE_DATA_UID.match(fetch_command_without_literal).group('uid'))
             flags = FETCH_MESSAGE_DATA_FLAGS.match(fetch_command_without_literal).group('flags')
             seqnum = FETCH_MESSAGE_DATA_SEQNUM.match(fetch_command_without_literal).group('seqnum')
@@ -500,22 +464,24 @@ async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4
                 from_email_addr = email_from[start:end]              
                 chainUsers = read_csv_set_idx(deci_config['dir_paths']['chain_users_dir'])
                 email_recipients = chainUsers['Email']
+                
+                # If not, return with the current uid
                 if not(from_email_addr in email_recipients.values):
                     log_and_print(f'Email received from an address that\'s not on the mailing list: {from_email_addr}')
                     return uid
                 
-                
+                # Begin parsing the email's contents
                 log_and_print(f'Incoming email headers:\n{message_headers}')
                 dwnld_resp = await imap_client.uid('fetch', str(uid), 'BODY.PEEK[]')
                 thread_msg = BytesParser().parsebytes(dwnld_resp.lines[1])
                 email_timestamp = parser.parse(thread_msg.get('Date'))
                 html_email = False
                 email_msg = thread_msg
-                # If the email is a thread, take the most recent message
+                
+                # Try to retrieve the HTML representation of the email
                 while email_msg.is_multipart():
                     if len(email_msg.get_payload()) == 2:
                         if 'html' in email_msg.get_payload(1).get('Content-Type'):
-                            html_email = True 
                             email_msg = email_msg.get_payload(1)
                         else:
                             email_msg = email_msg.get_payload(0)     
@@ -527,13 +493,13 @@ async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4
 
                 # Extract message body
                 msg_body = email_msg
-                email_seen = False # This variable doesn't actually do anything since I haven't figured it out
+                email_seen = False 
                 while type(msg_body) != str:
                     if type(msg_body) == list:
                         msg_body = msg_body[0]
                         continue
                     
-                    # This code doesn't work the way I want it to :(
+                    # I think this filters out emails that were "just opened by a person on Outlook/GMail"
                     elif not(msg_body.is_multipart()) and ('Content-Transfer-Encoding' in msg_body.keys()) and (msg_body.get('Content-Transfer-Encoding') != 'quoted-printable'):
                         email_seen = True
                         ''' Legacy Code
@@ -628,7 +594,8 @@ async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4
                             pass
                     if len(att_paths) == 2: 
                         att_paths = att_paths[::-1]    
-                                                                                          
+                                 
+                    # Set the subject                                                         
                     subject = message_headers.get('subject')      
                     
                     # If sender is in more than one server, send an error message
@@ -636,16 +603,15 @@ async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4
                         sender_email = email_from[email_from.find("<")+1:email_from.find(">")]
                     except:
                         sender_email = email_from
-                    
                     sender_df = chainUsers[chainUsers['Email'] == sender_email]
                     sender_srvs = pd.unique(sender_df["Server_ID"].values)
-                    sender_srvs_count = len(sender_srvs)
-                    
+                    sender_srvs_count = len(sender_srvs)                   
                     if sender_srvs_count > 1:
                         err_msg = 'Error: You\'re in more than 1 server mailing list.\n'
                         err_msg += 'Please remove yourself from all but one server\'s mailing list\n'
                         err_msg += 'or contact the bot admin.'
                         sendEmail(email_recipients = [email_from], subject = f'Re: {subject}', body = err_msg)
+                    
                     # Forward email to all other emails in server mailing list and to the Discord server
                     else:
                         srv_id = sender_srvs[0]
@@ -653,13 +619,14 @@ async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4
                         email_recipients = list(set(email_recipients) - set([sender_email]))
                         sendEmail(email_recipients = email_recipients, subject = f'Fw: {subject}', body = msg_body, attachments = att_paths)
                         await sendEmailAsDiscordMsg(dcts, subject, email_from, msg_body, att_paths)
-            
+
+                # Set the new max uid
                 new_max_uid = uid
     else:
         log_and_print('error %s' % response)
     return new_max_uid
 
-async def handle_server_push(push_messages: Collection[str]) -> None: # or str
+async def handle_server_push(push_messages: Collection[str]) -> None: 
     for msg in push_messages:
         if msg.endswith(b'EXISTS'):
             log_and_print('new email: %s' % msg) # could fetch only the message instead of max_uuid:* in the loop
@@ -672,7 +639,7 @@ async def handle_server_push(push_messages: Collection[str]) -> None: # or str
 
 async def imap_loop(dcts: DeciConsts, host: str, user: str, password: str) -> None:
     '''
-    Listens for incoming emails by calling fetch_messages_headers()
+    Listens for incoming emails by calling fetch_email_messages()
 
     Args:
         dcts (DeciConsts): Class containing global variables for the bot
@@ -682,10 +649,10 @@ async def imap_loop(dcts: DeciConsts, host: str, user: str, password: str) -> No
                         This should NEVER be stored in plain text outside of the program!
     '''
     
+    # Set up the imap client
     log_and_print('Listening for emails using imap_loop...', terminal_print=True)
     imap_client = aioimaplib.IMAP4_SSL(host=host, timeout=30)
     await imap_client.wait_hello_from_server()
-
     await imap_client.login(user, password)
     await imap_client.select('INBOX')
 
@@ -693,20 +660,21 @@ async def imap_loop(dcts: DeciConsts, host: str, user: str, password: str) -> No
     deci_config = read_config_file(dcts.deci_config_dir)
     max_uid_path = deci_config['dir_paths']['max_uid_path']
 
+    # Set the current max uid
     persistent_max_uid = 1
     with open(max_uid_path) as f:
         persistent_max_uid = int(f.read())
         log_and_print(f'persistent_max_uid = {persistent_max_uid}')
         
+    # Loop the email fetch function
     while True:
-        persistent_max_uid = await fetch_messages_headers(dcts, imap_client, persistent_max_uid)
+        persistent_max_uid = await fetch_email_messages(dcts, imap_client, persistent_max_uid)
         log_and_print('%s starting idle' % user)
         idle_task = await imap_client.idle_start(timeout=60)
         await handle_server_push(await imap_client.wait_server_push())
         imap_client.idle_done()
         await wait_for(idle_task, timeout=5)
         log_and_print('%s ending idle' % user)
-# Check Email function ^^^
 
 def main():    
     # Initialize the global constants and the bot
@@ -723,7 +691,6 @@ def main():
     handler = log.FileHandler(log_file_path, 
                             mode = 'a', 
                             encoding = 'utf-8',
-
                             ) 
     handler.setFormatter(log.Formatter('%(asctime)s [%(levelname)s]: %(message)s'))
     root_logger.addHandler(handler)    
@@ -1079,7 +1046,7 @@ def main():
     @bot.command()
     async def edit_me(ctx):
         '''
-        Edit the user's info in chainUsers.csv
+        Edit the user's info in the mailing list
 
         Args:
             ctx (Discord.Context): An object representing the message that called this command
@@ -1125,7 +1092,7 @@ def main():
     @bot.command()
     async def remove_me(ctx):
         '''
-        Removes the user from chainUsers.csv
+        Removes the user from the mailing list
 
         Args:
             ctx (Discord.Context): An object representing the message that called this command
@@ -1275,7 +1242,6 @@ def main():
                 await message.reply(msg_re)
                 return
 
-            
             # If attachments are present, save them
             disc_atts = []
             for i in message.attachments:
