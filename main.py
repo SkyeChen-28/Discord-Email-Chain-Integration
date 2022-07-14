@@ -55,8 +55,8 @@ class DeciConsts:
             enter_fields (bool, optional): If true, will prompt admin to input some values for some fields. Defaults to False.
         '''
         self.deci_config_dir = 'deci_config.json'
-        self.email_user = os.getenv('DC_OUTLOOK_ADDR')
-        self.email_pass = os.getenv('DC_OUTLOOK_PASS')
+        self.email_user = os.getenv('DC_EMAIL_ADDR')
+        self.email_pass = os.getenv('DC_EMAIL_PASS')
         self.bot_token = os.getenv('DISCORD_BOT')
             
         # Discord related constants
@@ -65,17 +65,17 @@ class DeciConsts:
          
         if enter_fields:
             # Initialize a Discord client
-            self.bot = commands.Bot(command_prefix=self.COMMAND_PREFIX, intents = intents) 
+            self.bot = commands.Bot(command_prefix=self.COMMAND_PREFIX, intents = intents)
+            if (self.email_user is None):
+                warn_msg = 'No email set in environment variable `DC_EMAIL_ADDR`.\n'
+                warn_msg += 'It\'s recommended that you set that EnvVar as your managing email address\n'
+                log_and_print(warn_msg, terminal_print=True)
+                self.email_user = input('Enter the managing email address: ')     
             if (self.email_pass is None):
-                warn_msg = 'No email password set in environment variable `DC_OUTLOOK_PASS`.\n'
+                warn_msg = 'No email password set in environment variable `DC_EMAIL_PASS`.\n'
                 warn_msg += 'It\'s recommended that you set that EnvVar as your managing email password\n'
                 log_and_print(warn_msg, terminal_print=True)
                 self.email_pass = getpass.getpass()
-            if (self.email_user is None):
-                warn_msg = 'No email set in environment variable `DC_OUTLOOK_ADDR`.\n'
-                warn_msg += 'It\'s recommended that you set that EnvVar as your managing email address\n'
-                log_and_print(warn_msg, terminal_print=True)
-                self.email_user = input('Enter the managing email address: ')    
             if (self.bot_token is None):     
                 warn_msg = 'No bot token in environment variable `DISCORD_BOT`.\n'
                 warn_msg += 'It\'s recommended that you set that EnvVar as your bot\'s token\n'
@@ -237,14 +237,14 @@ async def check_repair_config_files(dcts: DeciConsts):
                 df.to_csv(path, index = False)
                 log_and_print(f'Created {path}')
     return
-# Helper functions ^^^
 
-# Check Discord function vvv
-def sendDiscordMessageAsEmail(dcts: DeciConsts, subject: str, body: str, attachments: list) -> str:
+def sendEmail(email_recipients: list, subject: str, body: str, attachments: list = []) -> str:
     '''
     Simple send email script
 
     Args:
+        email_recipients (list):    A list of strings. 
+                                    The emails of all intended recipients of the email.
         subject (str): Subject of the email to be sent
         body (str): Body of email to be sent in html format
         attachments (list): List of strings containing the file paths to the attachments
@@ -254,12 +254,10 @@ def sendDiscordMessageAsEmail(dcts: DeciConsts, subject: str, body: str, attachm
         str: A confirmation message
     '''
     
-    # Load in the recipients
+    dcts = DeciConsts()
     deci_config = read_config_file(dcts.deci_config_dir)
-    chainUsers = read_csv_set_idx(deci_config['dir_paths']['chain_users_dir'])
-    email_recipients = chainUsers['Email']
     emRecipients = ', '.join(email_recipients)
-
+    
     if subject is None:
         email_subject = body
     else: 
@@ -303,6 +301,77 @@ def sendDiscordMessageAsEmail(dcts: DeciConsts, subject: str, body: str, attachm
         log_and_print(f'Removed file: {i}')
         
     return confirmationMsg
+# Helper functions ^^^
+
+# Check Discord function vvv
+def sendDiscordMessageAsEmail(ctx, dcts: DeciConsts, subject: str, body: str, attachments: list) -> str:
+    '''
+    Simple send email script
+
+    Args:
+        ctx (Discord.Context): An object representing the message that called this command
+        subject (str): Subject of the email to be sent
+        body (str): Body of email to be sent in html format
+        attachments (list): List of strings containing the file paths to the attachments
+                            to be sent
+
+    Returns:
+        str: A confirmation message
+    '''
+    
+    # Load in the recipients
+    deci_config = read_config_file(dcts.deci_config_dir)
+    chainUsers = read_csv_set_idx(deci_config['dir_paths']['chain_users_dir'])
+    srv_id = ctx.guild.id
+    email_recipients = chainUsers.loc[chainUsers['Server_ID'] == srv_id, 'Email'].values
+    # emRecipients = ', '.join(email_recipients)
+    
+    confirmationMsg = sendEmail(email_recipients, subject, body, attachments)
+
+
+    # if subject is None:
+    #     email_subject = body
+    # else: 
+    #     email_subject = subject
+    # email_body = body
+    
+    # emMsg = MIMEMultipart()
+    # email_user, email_pass = dcts.email_user, dcts.email_pass
+    # emMsg['From'] = email_user
+    # emMsg['To'] = emRecipients
+    # emMsg['Subject'] = email_subject
+    
+    # emMsg.attach(MIMEText(email_body, 'html'))
+
+    # for f in attachments or []:
+    #     with open(f, "rb") as fil:
+    #         part = MIMEApplication(
+    #             fil.read(),
+    #             Name=basename(f)
+    #         )
+    #     # After the file is closed
+    #     part['Content-Disposition'] = 'attachment; filename="%s"' % basename(f)
+    #     emMsg.attach(part)
+
+    # # Read in the necessary variables from deci_config
+    # smtp_host = deci_config['em_srv_parms']['smtp_host']
+    # smtp_port = deci_config['em_srv_parms']['smtp_port']
+    
+    # email_server = smtplib.SMTP(host = smtp_host, port = smtp_port)
+    # email_server.ehlo()
+    # email_server.starttls()
+        
+    # email_server.login(email_user, email_pass)
+    # email_server.sendmail(email_user, email_recipients, emMsg.as_string())
+    # confirmationMsg = f'Email [{email_subject}] successfully sent!'
+    # log_and_print(confirmationMsg)
+    # email_server.quit()
+    
+    # for i in attachments:
+    #     os.remove(i)   
+    #     log_and_print(f'Removed file: {i}')
+        
+    return confirmationMsg
 # Check Discord function ^^^
 
 # Check Email function vvv
@@ -326,15 +395,33 @@ async def sendEmailAsDiscordMsg(dcts: DeciConsts, subject: str, sender: str, ema
     chain_users_dir = deci_config['dir_paths']['chain_users_dir']
     guilds_conf = read_config_file(guilds_dir)
     chain_users = read_csv_set_idx(chain_users_dir)
-    
-    # Send the email to all servers that the sender is listed in
     try:
         sender_email = sender[sender.find("<")+1:sender.find(">")]
     except:
         sender_email = sender
+        
+    # sender_df = chain_users[chain_users['Email'] == sender_email]
+    # sender_srvs = sender_df.get_level_values('Server_ID')
+    # sender_srvs_count = len(sender_srvs)
+    
+    # # If sender is in more than one server, send an error message
+    # if sender_srvs_count > 1:
+    #     err_msg = 'Error: You\'re in more than 1 server mailing list.\n'
+    #     err_msg += 'Please remove yourself from all but one server mailing list\n'
+    #     err_msg += 'or contact the bot admin.'
+    #     sendEmail(email_recipients = [sender], subject = f'Re: {subject}', body = err_msg)
+    # # Forward email to all other emails in server mailing list
+    # else:
+    #     srv_id = sender_srvs[0]
+    #     email_recipients = chain_users.loc[chain_users['Server_ID'] == srv_id, 'Email'].values
+    #     sendEmail(email_recipients = email_recipients, subject = f'Re: {subject}', body = emailMsg)
+        
+    
+    # Send the email to all servers that the sender is listed in
     chain_users = chain_users[chain_users['Email'] == sender_email]
+    guild_ids = chain_users['Server_ID'].values
     channels = []
-    for i in chain_users['Server_ID'].values:
+    for i in guild_ids:
         channels.append(guilds_conf[str(i)]['email_channel'])
             
     # Modify replying subject string
@@ -345,33 +432,33 @@ async def sendEmailAsDiscordMsg(dcts: DeciConsts, subject: str, sender: str, ema
         subject = re_subj + subject
             
     # Set channel
-    for guild in bot.guilds:
+    guild = guild_ids[0]
         
-        # Edit the subject line
-        guilds_conf[str(guild.id)]['currentSubject'] = subject     
-        update_config_file(guilds_dir, guilds_conf)
+    # Edit the subject line
+    guilds_conf[str(guild)]['currentSubject'] = subject     
+    update_config_file(guilds_dir, guilds_conf)
         
-        for ch in channels:
-            channel = bot.get_channel(int(ch))
-            
-            # Format message for Discord
-            if emailMsg[-1] == '\n':
-                emailMsg = emailMsg[:-1]
-            emailMsg = emailMsg.replace('\n', '\n> ')
-            discMsg = f'New message from _{sender}_:\n'
-            discMsg += f'**Subject: {subject}**\n'
-            discMsg += f'> {emailMsg}'
-            # Send body text as Discord message
-            await channel.send(discMsg)  
-            
-            # Send attachments one by one
-            att_paths_len = len(att_paths)
-            if att_paths_len != 0:   
-                for i in att_paths: 
-                    with open(i, mode='rb') as f:
-                        await channel.send(f'[image: {i}]', file = dc.File(f)) 
-                    os.remove(i)   
-                    log_and_print(f'Removed file: {i}')
+    for ch in channels:
+        channel = bot.get_channel(int(ch))
+        
+        # Format message for Discord
+        if emailMsg[-1] == '\n':
+            emailMsg = emailMsg[:-1]
+        emailMsg = emailMsg.replace('\n', '\n> ')
+        discMsg = f'New message from _{sender}_:\n'
+        discMsg += f'**Subject: {subject}**\n'
+        discMsg += f'> {emailMsg}'
+        # Send body text as Discord message
+        await channel.send(discMsg)  
+        
+        # Send attachments one by one
+        att_paths_len = len(att_paths)
+        if att_paths_len != 0:   
+            for i in att_paths: 
+                with open(i, mode='rb') as f:
+                    await channel.send(f'[image: {i}]', file = dc.File(f)) 
+                os.remove(i)   
+                log_and_print(f'Removed file: {i}')
 
 async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4_SSL, max_uid: int) -> int:
     ID_HEADER_SET = {'Content-Type', 'From', 'To', 'Cc', 'Bcc', 'Date', 'Subject', 'Message-ID', 'In-Reply-To', 'References'}
@@ -542,8 +629,30 @@ async def fetch_messages_headers(dcts: DeciConsts, imap_client: aioimaplib.IMAP4
                     if len(att_paths) == 2: 
                         att_paths = att_paths[::-1]    
                                                                                           
-                    subject = message_headers.get('subject')                 
-                    await sendEmailAsDiscordMsg(dcts, subject, email_from, msg_body, att_paths)
+                    subject = message_headers.get('subject')      
+                    
+                    # If sender is in more than one server, send an error message
+                    try:
+                        sender_email = email_from[email_from.find("<")+1:email_from.find(">")]
+                    except:
+                        sender_email = email_from
+                    
+                    sender_df = chainUsers[chainUsers['Email'] == sender_email]
+                    sender_srvs = pd.unique(sender_df["Server_ID"].values)
+                    sender_srvs_count = len(sender_srvs)
+                    
+                    if sender_srvs_count > 1:
+                        err_msg = 'Error: You\'re in more than 1 server mailing list.\n'
+                        err_msg += 'Please remove yourself from all but one server\'s mailing list\n'
+                        err_msg += 'or contact the bot admin.'
+                        sendEmail(email_recipients = [email_from], subject = f'Re: {subject}', body = err_msg)
+                    # Forward email to all other emails in server mailing list and to the Discord server
+                    else:
+                        srv_id = sender_srvs[0]
+                        email_recipients = chainUsers.loc[chainUsers['Server_ID'] == srv_id, 'Email'].values
+                        email_recipients = list(set(email_recipients) - set([sender_email]))
+                        sendEmail(email_recipients = email_recipients, subject = f'Fw: {subject}', body = msg_body, attachments = att_paths)
+                        await sendEmailAsDiscordMsg(dcts, subject, email_from, msg_body, att_paths)
             
                 new_max_uid = uid
     else:
@@ -1214,7 +1323,7 @@ def main():
             author_colour = chain_users.loc[message.author.id, 'Colour']
             emBody = f'''<strong>New message from <span style="text-decoration: underline;">{author_name}</span>: </strong> <br /> <br />'''
             emBody += f'<p style="color:{author_colour};">{msg_raw}</p>'
-            confirmationMsg = sendDiscordMessageAsEmail(dcts, subject, emBody, disc_atts)
+            confirmationMsg = sendDiscordMessageAsEmail(message, dcts, subject, emBody, disc_atts)
             await message.reply(confirmationMsg)
             await message.add_reaction('\N{INCOMING ENVELOPE}')
             print('')
