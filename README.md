@@ -12,5 +12,5 @@ TBA
 2. To install all dependencies, run the following command in a terminal:
 
 ```{cmd}
-cd/to/project/directory> pip install -U -r requirements.txt 
+pip install -U -r requirements.txt 
 ```
