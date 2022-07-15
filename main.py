@@ -617,7 +617,9 @@ async def fetch_email_messages(dcts: DeciConsts, imap_client: aioimaplib.IMAP4_S
                         srv_id = sender_srvs[0]
                         email_recipients = chainUsers.loc[chainUsers['Server_ID'] == srv_id, 'Email'].values
                         email_recipients = list(set(email_recipients) - set([sender_email]))
-                        sendEmail(email_recipients = email_recipients, subject = f'Fw: {subject}', body = msg_body, attachments = att_paths)
+                        # Forward emails if there are recipients
+                        if email_recipients != []:
+                            sendEmail(email_recipients = email_recipients, subject = f'Fw: {subject}', body = msg_body, attachments = att_paths)
                         await sendEmailAsDiscordMsg(dcts, subject, email_from, msg_body, att_paths)
 
                 # Set the new max uid
