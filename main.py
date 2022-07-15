@@ -682,6 +682,11 @@ def main():
     bot = dcts.bot
     bot_token = dcts.bot_token
     
+    # Repair files
+    tasks = [asyncio.ensure_future(check_repair_config_files(dcts)),] # Create required files if they don't exist
+    loop = get_event_loop()
+    loop.run_until_complete(asyncio.wait(tasks))
+    
     # Configure logging
     root_logger= log.getLogger()
     root_logger.setLevel(log.INFO) 
@@ -1306,7 +1311,6 @@ def main():
     deci_config = read_config_file(dcts.deci_config_dir)
     imap_host = deci_config['em_srv_parms']['imap_host']
     tasks = [
-        asyncio.ensure_future(check_repair_config_files(dcts)), # Create required files if they don't exist
         asyncio.ensure_future(imap_loop(dcts, imap_host, dcts.email_user, dcts.email_pass)), # Email Listener Task
         asyncio.ensure_future(dcts.bot.start(bot_token)) # Discord Bot Task
     ]
