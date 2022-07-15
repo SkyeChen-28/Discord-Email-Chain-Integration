@@ -688,6 +688,9 @@ def main():
     today = str(date.today())
     deci_config = read_config_file(dcts.deci_config_dir)
     log_file_path = deci_config["dir_paths"]["log_file_dir"] + f"/deci_log_{today}.log"
+    if not(os.path.exists(log_file_path)):
+        with open(log_file_path, mode = 'w') as fp:
+            fp.write('')
     handler = log.FileHandler(log_file_path, 
                             mode = 'a', 
                             encoding = 'utf-8',
