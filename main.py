@@ -238,7 +238,7 @@ async def check_repair_config_files(dcts: DeciConsts):
                 df.to_csv(path, index = False)
                 log_and_print(f'Created {path}')    
 
-def send_email(email_recipients: list, subject: str, body: str, attachments: list = []) -> str:
+def send_email(email_recipients: list, subject: str, body: str, attachments: list = [], del_atts = True) -> str:
     '''
     Simple send email script
 
@@ -249,6 +249,7 @@ def send_email(email_recipients: list, subject: str, body: str, attachments: lis
         body (str): Body of email to be sent in html format
         attachments (list): List of strings containing the file paths to the attachments
                             to be sent
+        del_atts (bool): If true, will delete all attachments after execution
 
     Returns:
         str: A confirmation message
@@ -300,9 +301,10 @@ def send_email(email_recipients: list, subject: str, body: str, attachments: lis
     email_server.quit()
     
     # Remove each attachment now that we don't need them anymore
-    for i in attachments:
-        os.remove(i)   
-        log_and_print(f'Removed file: {i}')
+    if del_atts:
+        for i in attachments:
+            os.remove(i)   
+            log_and_print(f'Removed file: {i}')
         
     return confirm_msg
 
@@ -611,7 +613,7 @@ async def fetch_email_messages(dcts: DeciConsts, imap_client: aioimaplib.IMAP4_S
                         email_recipients = list(set(email_recipients) - set([sender_email]))
                         # Forward emails if there are recipients
                         if email_recipients != []:
-                            send_email(email_recipients = email_recipients, subject = f'Fw: {subject}', body = msg_body, attachments = att_paths)
+                            send_email(email_recipients = email_recipients, subject = f'Fw: {subject}', body = msg_body, attachments = att_paths, del_atts = False)
                         await send_email_as_disc_msg(dcts, subject, email_from, msg_body, att_paths)
 
                 # Set the new max uid
