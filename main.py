@@ -425,9 +425,6 @@ async def fetch_email_messages(dcts: DeciConsts, imap_client: aioimaplib.IMAP4_S
     # The code block that fetches emails. I don't understand this but it works
     ID_HEADER_SET = {'Content-Type', 'From', 'To', 'Cc', 'Bcc', 'Date', 'Subject', 'Message-ID', 'In-Reply-To', 'References'}
     FETCH_MESSAGE_DATA_UID = re.compile(rb'.*UID (?P<uid>\d+).*')
-    # FETCH_MESSAGE_DATA_SEQNUM = re.compile(rb'(?P<seqnum>\d+) FETCH.*')
-    # FETCH_MESSAGE_DATA_FLAGS  = re.compile(rb'.*FLAGS \((?P<flags>.*?)\).*')
-    # msg_attributes_tup = namedtuple('MessageAttributes', 'uid flags sequence_number')
 
     response = await imap_client.uid('fetch', '%d:*' % (max_uid + 1),
                                      '(UID FLAGS BODY.PEEK[HEADER.FIELDS (%s)])' % ' '.join(ID_HEADER_SET))
@@ -440,10 +437,6 @@ async def fetch_email_messages(dcts: DeciConsts, imap_client: aioimaplib.IMAP4_S
 
             # Define variables for important email parameters
             uid = int(FETCH_MESSAGE_DATA_UID.match(fetch_command_without_literal).group('uid'))
-            # flags = FETCH_MESSAGE_DATA_FLAGS.match(fetch_command_without_literal).group('flags')
-            # seqnum = FETCH_MESSAGE_DATA_SEQNUM.match(fetch_command_without_literal).group('seqnum')
-            # # these attributes could be used for local state management
-            # message_attrs = msg_attributes_tup(uid, flags, seqnum)
             
             # Read in the necessary variables from deci_config
             deci_config = read_config_file(dcts.deci_config_dir)
@@ -741,8 +734,6 @@ def main():
         log_and_print(f'set_channel(channel_link={channel_link}) was called')
         try:
             channel_id = channel_link[2:-1]
-            channel_id_int = int(channel_id)
-            channel = bot.get_channel(channel_id_int)
             dcts = DeciConsts()
             deci_config = read_config_file(dcts.deci_config_dir)
             guilds_dir = deci_config['dir_paths']['guilds_dir']
@@ -1227,7 +1218,7 @@ def main():
         chain_users_all = read_csv_set_idx(chain_users_dir, chain_users_idx_keys)
         
         # Check if anyone is in the server mailing list
-        if not(srv_id in chain_users_all.index.get_level_values('Server_ID')):
+        if (srv_id not in chain_users_all.index.get_level_values('Server_ID')):
             msg_re = 'There\'s no one on the server mailing list. Consider adding yourself as the first using\n'
             msg_re += f'> {dcts.COMMAND_PREFIX}`add_me <Name> <Email Address> <Colour (Optional)>`'
             await message.reply(msg_re)
@@ -1236,7 +1227,7 @@ def main():
         
         # Check if author is in mailing list
         author_id = message.author.id
-        if not(author_id in chain_users.index):
+        if (author_id not in chain_users.index):
             msg_re = 'You are not on the mailing list. To add yourself, use: \n'
             msg_re += f'> {dcts.COMMAND_PREFIX}`add_me <Name> <Email Address> <Colour (Optional)>`'
             await message.reply(msg_re)
@@ -1296,10 +1287,10 @@ def main():
             except:
                 author_name = message.author.name
             author_colour = chain_users.loc[message.author.id, 'Colour']
-            emBody = f'''<strong>New message from <span style="text-decoration: underline;">{author_name}</span>: </strong> <br /> <br />'''
-            emBody += f'<p style="color:{author_colour};">{msg_raw}</p>'
-            confirmationMsg = send_disc_msg_as_email(message, dcts, subject, emBody, disc_atts)
-            await message.reply(confirmationMsg)
+            email_body = f'''<strong>New message from <span style="text-decoration: underline;">{author_name}</span>: </strong> <br /> <br />'''
+            email_body += f'<p style="color:{author_colour};">{msg_raw}</p>'
+            confirm_msg = send_disc_msg_as_email(message, dcts, subject, email_body, disc_atts)
+            await message.reply(confirm_msg)
             await message.add_reaction('\N{INCOMING ENVELOPE}')
             print('')
         else:
