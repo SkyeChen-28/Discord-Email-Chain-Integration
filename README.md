@@ -1,6 +1,6 @@
 # Discord-Email-Chain-Integration
 
-Discord-Email-Chain-Integration
+Version: v1.0.0
 
 ## Installation
 
