@@ -1220,7 +1220,7 @@ def main():
                 msg_re += 'I recommend that you use another channel since most messages that are sent here\n'
                 msg_re += 'will be sent to the email chain!'
                 await message.reply(msg_re)
-                await bot.process_commands(message)
+            await bot.process_commands(message)
             return
         
         # Read in the chain_users dataframe
