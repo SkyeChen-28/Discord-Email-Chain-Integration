@@ -1206,13 +1206,21 @@ def main():
         
         # If the command prefix is detected, then execute the command
         # and don't execute the rest of on_message
-        if message.content.startswith(dcts.COMMAND_PREFIX):
-            if channel_id_sent_from == email_channel:
+        msg_content = message.content
+        if msg_content.startswith(dcts.COMMAND_PREFIX):
+            cmd_name = msg_content.replace(dcts.COMMAND_PREFIX, '').split(' ')[0]
+            all_cmds = [c.name for c in bot.commands]
+            if (cmd_name not in all_cmds):
+                msg_re = f'Error: command `{cmd_name}` not found. Use\n'
+                msg_re += f'> {dcts.COMMAND_PREFIX}`help`\n'
+                msg_re += 'to see a list of all commands.'
+                await message.reply(msg_re)
+            elif channel_id_sent_from == email_channel:
                 msg_re = f'It looks like you attempted to send a bot command in {message.channel.mention}\n'
                 msg_re += 'I recommend that you use another channel since most messages that are sent here\n'
                 msg_re += 'will be sent to the email chain!'
                 await message.reply(msg_re)
-            await bot.process_commands(message)
+                await bot.process_commands(message)
             return
         
         # Read in the chain_users dataframe
