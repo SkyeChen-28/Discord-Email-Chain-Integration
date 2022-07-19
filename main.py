@@ -831,6 +831,21 @@ def main():
         reply_msg = f'Subject line successfully switched to `{subject_line}`'
         await ctx.reply(reply_msg)
         log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
+
+    @bot.command()
+    async def edit_subject(ctx, *subject_line):
+        '''
+        Alias for edit_subject_line
+
+        Sets subject line to `subject_line`
+        
+        Replies with a confirmation message
+
+        Args:
+            ctx (Discord.Context): An object representing the message that called this command
+            subject_line (str): The subject line you wish to set for outgoing emails.
+        '''
+        await edit_subject_line(ctx, subject_line)
         
     @bot.command(hidden = True)
     async def add_user(ctx, mention_user, name: str = None, email: str = None, colour: str = 'DarkSlateGray'):
