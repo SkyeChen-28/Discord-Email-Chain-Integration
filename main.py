@@ -1235,18 +1235,18 @@ def main():
             msg_re += f'> {dcts.COMMAND_PREFIX}`add_me <Name> <Email Address> <Colour (Optional)>`'
             await message.reply(msg_re)
             return
-        chain_users = chain_users_all.loc[srv_id]
-        
-        # Check if author is in mailing list
-        author_id = message.author.id
-        if (author_id not in chain_users.index):
-            msg_re = 'You are not on the mailing list. To add yourself, use: \n'
-            msg_re += f'> {dcts.COMMAND_PREFIX}`add_me <Name> <Email Address> <Colour (Optional)>`'
-            await message.reply(msg_re)
-            return
+        chain_users = chain_users_all.loc[srv_i
         
         # Check that the message was sent from the allowed channel
         if channel_id_sent_from == email_channel:
+            # Check if author is in mailing list
+            author_id = message.author.id
+            if (author_id not in chain_users.index):
+                msg_re = 'You are not on the mailing list. To add yourself, use: \n'
+                msg_re += f'> {dcts.COMMAND_PREFIX}`add_me <Name> <Email Address> <Colour (Optional)>`'
+                await message.reply(msg_re)
+                return
+
             # If currentSubject is None, prompt user to add a currentSubject
             if subject is None:
                 msg_re = 'No subject line is set for email communications. Please set a subject line using\n'
