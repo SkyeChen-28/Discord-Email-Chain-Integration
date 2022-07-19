@@ -848,7 +848,7 @@ def main():
         await edit_subject_line(ctx, *subject_line)
         
     @bot.command(hidden = True)
-    async def add_user(ctx, mention_user, name: str = None, email: str = None, colour: str = 'DarkSlateGray'):
+    async def add_user(ctx, mention_user = None, name: str = None, email: str = None, colour: str = 'DarkSlateGray'):
         '''
         Adds a user to the mailing list
         
@@ -866,7 +866,8 @@ def main():
         log_and_print(f'add_user(mention_user={mention_user}, name={name}, email={email}, colour={colour}) was called')
         
         dcts = DeciConsts()
-        if name is None or email is None:
+        # Check for syntax errors
+        if mention_user is None or name is None or email is None:
             reply_msg = 'Invalid syntax error: The correct syntax for this command is\n'
             reply_msg += f'{dcts.COMMAND_PREFIX}add_user <@user> <Name> <Email> <Colour (optional)>'
             await ctx.reply(reply_msg)
@@ -911,7 +912,7 @@ def main():
         log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
         
     @bot.command()
-    async def add_me(ctx, name: str, email: str, colour: str = 'DarkSlateGray'):
+    async def add_me(ctx, name: str = None, email: str = None, colour: str = 'DarkSlateGray'):
         '''
         Adds the user to the mailing list
         
@@ -924,6 +925,13 @@ def main():
             colour (str, optional): The text colour that the user wishes to have their emails sent in. 
                                     Defaults to 'DarkSlateGray'.
         '''
+        
+        # Check for syntax errors
+        if name is None or email is None:
+            reply_msg = 'Invalid syntax error: The correct syntax for this command is\n'
+            reply_msg += f'{dcts.COMMAND_PREFIX}add_me <Name> <Email> <Colour (optional)>'
+            await ctx.reply(reply_msg)
+            log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
         
         # Read in the necessary variables from deci_config
         dcts = DeciConsts()
@@ -998,7 +1006,7 @@ def main():
         await(get_user_info(ctx, f'<@{ctx.author.id}>'))
     
     @bot.command(hidden = True)
-    async def edit_user(ctx, mention_user):
+    async def edit_user(ctx, mention_user = None):
         '''
         Edit a user's info in chainUsers.csv
 
@@ -1009,6 +1017,13 @@ def main():
         
         log_and_print(f'edit_user(mention_user={mention_user}) was called. The logging for this function is not comprehensive')
         
+        # Check for syntax errors
+        if mention_user is None:
+            reply_msg = 'Invalid syntax error: The correct syntax for this command is\n'
+            reply_msg += f'{dcts.COMMAND_PREFIX}edit_user <@user>'
+            await ctx.reply(reply_msg)
+            log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
+
         # Read in the necessary variables from deci_config
         dcts = DeciConsts()
         deci_config = read_config_file(dcts.deci_config_dir)
