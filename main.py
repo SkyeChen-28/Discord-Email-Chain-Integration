@@ -1235,7 +1235,7 @@ def main():
             msg_re += f'> {dcts.COMMAND_PREFIX}`add_me <Name> <Email Address> <Colour (Optional)>`'
             await message.reply(msg_re)
             return
-        chain_users = chain_users_all.loc[srv_i
+        chain_users = chain_users_all.loc[srv_i]
         
         # Check that the message was sent from the allowed channel
         if channel_id_sent_from == email_channel:
