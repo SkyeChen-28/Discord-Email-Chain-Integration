@@ -845,7 +845,7 @@ def main():
             ctx (Discord.Context): An object representing the message that called this command
             subject_line (str): The subject line you wish to set for outgoing emails.
         '''
-        await edit_subject_line(ctx, subject_line)
+        await edit_subject_line(ctx, *subject_line)
         
     @bot.command(hidden = True)
     async def add_user(ctx, mention_user, name: str = None, email: str = None, colour: str = 'DarkSlateGray'):
@@ -925,8 +925,31 @@ def main():
                                     Defaults to 'DarkSlateGray'.
         '''
         
+        # Read in the necessary variables from deci_config
+        dcts = DeciConsts()
+        deci_config = read_config_file(dcts.deci_config_dir)
+        chain_users_dir = deci_config['dir_paths']['chain_users_dir']
+        chain_users_idx_keys = deci_config["chain_users_idx_keys"]
+        
+        # Read in the chain_users dataframe
+        srv_id = ctx.guild.id
+        chain_users_all = read_csv_set_idx(chain_users_dir, chain_users_idx_keys)
+        try:
+            chain_users = chain_users_all.loc[srv_id]
+        except:
+            chain_users = chain_users_all
+        mention_user = f'<@{ctx.author.id}>'
+
+        # Check if user is already in the csv
+        user_id = int(mention_user[2:-1])
+        if user_id in chain_users.index:
+            reply_msg = f'{mention_user} is already on the mailing list. Use \n> {dcts.COMMAND_PREFIX}`edit_me` \nto edit your info.'
+            await ctx.reply(reply_msg)
+            log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
+            return
+
         # HTML colour is validated in add_user!
-        await(add_user(ctx, f'<@{ctx.author.id}>', name, email, colour))
+        await(add_user(ctx, mention_user, name, email, colour))
         
     @bot.command(brief = 'Retrieves a user\'s mailing list info', hidden = True)
     async def get_user_info(ctx, mention_user):
