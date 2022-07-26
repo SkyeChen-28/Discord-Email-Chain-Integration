@@ -455,7 +455,7 @@ async def fetch_email_messages(dcts: DeciConsts, imap_client: aioimaplib.IMAP4_S
                 # Check if sender is in mailing list
                 start = email_from.find('<') + 1
                 end = email_from.find('>')
-                from_email_addr = email_from[start:end]              
+                from_email_addr = email_from[start:end]
                 chain_usrs = read_csv_set_idx(deci_config['dir_paths']['chain_users_dir'])
                 email_recipients = chain_usrs['Email']
                 
@@ -540,7 +540,7 @@ async def fetch_email_messages(dcts: DeciConsts, imap_client: aioimaplib.IMAP4_S
                     email_thread_line_break = '\r\n\r\n\r\nOn '
                     email_thread_line_break2 = ']\r\n\r\nOn '      
                     email_thread_line_break3 = '\n\nGet Outlook for Android'   
-                    email_thread_line_break4 = '\n\n\n\n\nOn '                     
+                    email_thread_line_break4 = '\n\nOn '                     
                     if email_thread_line_break2 in msg_body:
                         idx = msg_body.find(email_thread_line_break2)+1
                         msg_body = msg_body[:idx]
@@ -556,6 +556,11 @@ async def fetch_email_messages(dcts: DeciConsts, imap_client: aioimaplib.IMAP4_S
                     log_and_print(f'Email Body:\n{msg_body}\n')
                     
                     # Extract attachments
+                    last_msg = thread_msg.get_payload(-1)
+                    if 'image' in last_msg.get_content_type():
+                        last_msg_is_image = True
+                    else:
+                        last_msg_is_image = False
                     att_paths = []
                     for part in thread_msg.walk():
                         if part.get_content_maintype() == 'multipart':
@@ -579,7 +584,7 @@ async def fetch_email_messages(dcts: DeciConsts, imap_client: aioimaplib.IMAP4_S
                                 outlook_atts_cond = False
                                 
                             gmail_atts_cond = filename in msg_body or part.get_content_maintype() == 'video'
-                            if outlook_atts_cond or gmail_atts_cond:
+                            if outlook_atts_cond or gmail_atts_cond or last_msg_is_image:
                                 with open(att_path, 'wb') as fp:
                                     fp.write(part.get_payload(decode=True))
                                 att_paths.append(att_path)
