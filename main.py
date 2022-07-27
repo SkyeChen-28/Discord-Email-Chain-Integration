@@ -81,7 +81,7 @@ class DeciConsts:
                 warn_msg += 'It\'s recommended that you set that EnvVar as your bot\'s token\n'
                 warn_msg += 'If you don\'t have a bot, create one here: https://discord.com/developers/applications/\n'
                 log_and_print(warn_msg, terminal_print=True)
-                self.email_user = input('Enter your bot token: ')              
+                self.bot_token = input('Enter your bot token: ')              
 
 def log_and_print(message: str, level: str = 'info', terminal_print: bool = False) -> None:
     '''
