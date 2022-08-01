@@ -370,12 +370,12 @@ async def send_email_as_disc_msg(dcts: DeciConsts, subject: str, sender: str, em
     for i in guild_ids:
         channels.append(guilds_conf[str(i)]['email_channel'])
             
-    # Modify replying subject string
-    re_subj = 'Re: '
-    if re_subj in subject:
-        while re_subj in subject:
-            subject = subject[4:]
-        subject = re_subj + subject
+    # # Modify replying subject string
+    # re_subj = 'Re: '
+    # if re_subj in subject:
+    #     while re_subj in subject:
+    #         subject = subject[4:]
+    #     subject = re_subj + subject
             
     # Set server
     guild = guild_ids[0]
