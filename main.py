@@ -58,10 +58,12 @@ class DeciConsts:
         self.email_user = os.getenv('DC_EMAIL_ADDR')
         self.email_pass = os.getenv('DC_EMAIL_PASS')
         self.bot_token = os.getenv('DISCORD_BOT')
-            
+        self.CMD_SYNTAX_ERR = 'Invalid syntax error: The correct syntax for this command is\n'
+                      
         # Discord related constants
         intents = dc.Intents.default()
         self.COMMAND_PREFIX = '<:9beggingLuz:872186647679230042>' 
+        self.COMMAND_PREFIX = '$' 
          
         if enter_fields:
             # Initialize a Discord client
@@ -82,6 +84,25 @@ class DeciConsts:
                 warn_msg += 'If you don\'t have a bot, create one here: https://discord.com/developers/applications/\n'
                 log_and_print(warn_msg, terminal_print=True)
                 self.bot_token = input('Enter your bot token: ')              
+
+    async def init_imap_client(self) -> aioimaplib.IMAP4_SSL:
+        '''
+        Initializes an imap client
+
+        Returns:
+            aioimaplib.IMAP4_SSL: An imap client
+        '''
+        
+        deci_config = read_config_file(self.deci_config_dir)
+        imap_host = deci_config['em_srv_parms']['imap_host']
+        # Initialize a imap_client
+        imap_client = aioimaplib.IMAP4_SSL(host=imap_host, timeout=30)
+        await imap_client.wait_hello_from_server()
+        await imap_client.login(self.email_user, self.email_pass)
+        await imap_client.select('INBOX')
+        
+        return imap_client
+
 
 def log_and_print(message: str, level: str = 'info', terminal_print: bool = False) -> None:
     '''
@@ -536,23 +557,24 @@ async def fetch_email_messages(dcts: DeciConsts, imap_client: aioimaplib.IMAP4_S
                         while msg_body[0] == '\n':
                             msg_body = msg_body[1:]
                     
-                    # Remove read threads
-                    email_thread_line_break = '\r\n\r\n\r\nOn '
-                    email_thread_line_break2 = ']\r\n\r\nOn '      
+                    # Remove read threads # Disabled since it doesn't work as intended
+                    # email_thread_line_break = '\r\n\r\n\r\nOn '
+                    # email_thread_line_break2 = ']\r\n\r\nOn '      
                     email_thread_line_break3 = '\n\nGet Outlook for Android'   
-                    email_thread_line_break4 = '\n\nOn '                     
-                    if email_thread_line_break2 in msg_body:
-                        idx = msg_body.find(email_thread_line_break2)+1
-                        msg_body = msg_body[:idx]
-                    elif email_thread_line_break in msg_body:
-                        idx = msg_body.find(email_thread_line_break)
-                        msg_body = msg_body[:idx]
-                    elif email_thread_line_break3 in msg_body:
+                    # email_thread_line_break4 = '\n\nOn '                     
+                    # if email_thread_line_break2 in msg_body:
+                    #     idx = msg_body.find(email_thread_line_break2)+1
+                    #     msg_body = msg_body[:idx]
+                    # elif email_thread_line_break in msg_body:
+                    #     idx = msg_body.find(email_thread_line_break)
+                    #     msg_body = msg_body[:idx]
+                    # elif email_thread_line_break3 in msg_body:
+                    if email_thread_line_break3 in msg_body:
                         idx = msg_body.find(email_thread_line_break3)
                         msg_body = msg_body[:idx]
-                    elif email_thread_line_break4 in msg_body:
-                        idx = msg_body.find(email_thread_line_break4)
-                        msg_body = msg_body[:idx]
+                    # elif email_thread_line_break4 in msg_body:
+                    #     idx = msg_body.find(email_thread_line_break4)
+                    #     msg_body = msg_body[:idx]
                     log_and_print(f'Email Body:\n{msg_body}\n')
                     
                     # Extract attachments
@@ -619,6 +641,7 @@ async def fetch_email_messages(dcts: DeciConsts, imap_client: aioimaplib.IMAP4_S
                         # Forward emails if there are recipients
                         if email_recipients != []:
                             send_email(email_recipients = email_recipients, subject = f'Fw: {subject}', body = msg_body, attachments = att_paths, del_atts = False)
+                            send_email(email_recipients = [sender_email], subject = f'Fw: {subject}', body = 'Email successfully forwarded!\n' + msg_body)
                         await send_email_as_disc_msg(dcts, subject, email_from, msg_body, att_paths)
 
                 # Set the new max uid
@@ -638,7 +661,11 @@ async def handle_server_push(push_messages: Collection[str]) -> None:
         else:
             log_and_print('unprocessed push email : %s' % msg)
 
-async def imap_loop(dcts: DeciConsts, host: str, user: str, password: str) -> None:
+async def imap_loop(dcts: DeciConsts, 
+                    # host: str, 
+                    # user: str, 
+                    # password: str
+                    ) -> None:
     '''
     Listens for incoming emails by calling fetch_email_messages()
 
@@ -652,11 +679,14 @@ async def imap_loop(dcts: DeciConsts, host: str, user: str, password: str) -> No
     
     # Set up the imap client
     log_and_print('Listening for emails using imap_loop...', terminal_print=True)
-    imap_client = aioimaplib.IMAP4_SSL(host=host, timeout=30)
-    await imap_client.wait_hello_from_server()
-    await imap_client.login(user, password)
-    await imap_client.select('INBOX')
-
+    imap_client = await dcts.init_imap_client()
+    user = dcts.email_user
+    
+    # imap_client = aioimaplib.IMAP4_SSL(host=host, timeout=30)
+    # await imap_client.wait_hello_from_server()
+    # await imap_client.login(user, password)
+    # await imap_client.select('INBOX')
+    
     # Read in the necessary variables from deci_config
     deci_config = read_config_file(dcts.deci_config_dir)
     max_uid_path = deci_config['dir_paths']['max_uid_path']
@@ -873,7 +903,7 @@ def main():
         dcts = DeciConsts()
         # Check for syntax errors
         if mention_user is None or name is None or email is None:
-            reply_msg = 'Invalid syntax error: The correct syntax for this command is\n'
+            reply_msg = dcts.CMD_SYNTAX_ERR
             reply_msg += f'{dcts.COMMAND_PREFIX}add_user <@user> <Name> <Email> <Colour (optional)>'
             await ctx.reply(reply_msg)
             log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
@@ -930,16 +960,17 @@ def main():
             colour (str, optional): The text colour that the user wishes to have their emails sent in. 
                                     Defaults to 'DarkSlateGray'.
         '''
+                
+        dcts = DeciConsts()
         
         # Check for syntax errors
         if name is None or email is None:
-            reply_msg = 'Invalid syntax error: The correct syntax for this command is\n'
+            reply_msg = dcts.CMD_SYNTAX_ERR
             reply_msg += f'{dcts.COMMAND_PREFIX}add_me <Name> <Email> <Colour (optional)>'
             await ctx.reply(reply_msg)
             log_and_print(f'Replied to {ctx.author.name} with: \n{reply_msg}')
         
         # Read in the necessary variables from deci_config
-        dcts = DeciConsts()
         deci_config = read_config_file(dcts.deci_config_dir)
         chain_users_dir = deci_config['dir_paths']['chain_users_dir']
         chain_users_idx_keys = deci_config["chain_users_idx_keys"]
@@ -1161,6 +1192,46 @@ def main():
         '''
         
         await remove_user(ctx, f'<@{ctx.author.id}>')
+               
+    @bot.command()
+    async def fetch_emails(ctx):
+        '''
+        Fetches emails
+
+        Args:
+            ctx (Discord.Context): An object representing the message that called this command
+        '''
+        
+        # Set up the imap client
+        log_and_print('fetch_emails() was called', terminal_print=True)
+        imap_client = await dcts.init_imap_client()
+        user = dcts.email_user
+        
+        # Read in the necessary variables from deci_config
+        deci_config = read_config_file(dcts.deci_config_dir)
+        max_uid_path = deci_config['dir_paths']['max_uid_path']
+                         
+        try:
+            # Set the current max uid
+            persistent_max_uid = 1
+            with open(max_uid_path) as f:
+                persistent_max_uid = int(f.read())
+                log_and_print(f'persistent_max_uid = {persistent_max_uid}')
+            
+            # Call the email fetch function
+            persistent_max_uid = await fetch_email_messages(dcts, imap_client, persistent_max_uid)
+            log_and_print('%s starting idle' % user)
+            # idle_task = await imap_client.idle_start(timeout=60)
+            # log_and_print('idle_start() executed')
+            # await handle_server_push(await imap_client.wait_server_push())
+            # log_and_print('handle_server_push() executed')
+            # imap_client.idle_done()
+            # await wait_for(idle_task, timeout=5)
+            # log_and_print('%s ending idle' % user)
+            await ctx.reply('Emails successfully fetched!')
+        except BaseException as e:
+            await ctx.reply(f'Something went wrong... \n{e}')
+        
         
     @bot.event
     async def on_ready():
@@ -1370,9 +1441,10 @@ def main():
     
     # Read in the necessary variables from deci_config
     deci_config = read_config_file(dcts.deci_config_dir)
-    imap_host = deci_config['em_srv_parms']['imap_host']
+    # imap_host = deci_config['em_srv_parms']['imap_host']
     tasks = [
-        asyncio.ensure_future(imap_loop(dcts, imap_host, dcts.email_user, dcts.email_pass)), # Email Listener Task
+        # asyncio.ensure_future(imap_loop(dcts, imap_host, dcts.email_user, dcts.email_pass)), # Email Listener Task
+        asyncio.ensure_future(imap_loop(dcts)), # Email Listener Task
         asyncio.ensure_future(dcts.bot.start(bot_token)) # Discord Bot Task
     ]
     loop = get_event_loop()
