@@ -1,5 +1,7 @@
 # Discord-Email-Chain-Integration
 
+A bot that sends incoming emails to a Discord channel, and new Discord messages as emails using Python.
+
 Version: v1.0.0
 
 ## Installation
